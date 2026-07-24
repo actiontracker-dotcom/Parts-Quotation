@@ -1,10 +1,23 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { validateQuotation } from "@/lib/validation/quotationSchema";
-import { appendQuotation } from "@/lib/services/googleSheetsService";
+import { appendQuotation, getQuotations } from "@/lib/services/googleSheetsService";
 
-// This route is the ONLY thing allowed to talk to Google Sheets.
+// This route handles both listing and creating quotations.
 // The frontend always calls this endpoint; it never touches the sheet directly.
+
+export async function GET() {
+  try {
+    const quotations = await getQuotations();
+    return NextResponse.json({ success: true, data: quotations });
+  } catch (error) {
+    console.error("[quotations/GET] Error:", error.message);
+    return NextResponse.json(
+      { success: false, message: "Failed to load quotations.", data: [] },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(request) {
   let body;

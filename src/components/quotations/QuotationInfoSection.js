@@ -3,8 +3,6 @@
 import { CardHeader, CardBody } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import SearchableDropdown from "@/components/ui/SearchableDropdown";
-import Select from "@/components/ui/Select";
-import { QUOTATION_VALIDITY_OPTIONS } from "@/lib/constants/quotationOptions";
 import {
   DIVISIONS,
   ENQUIRY_SOURCES,
@@ -20,7 +18,6 @@ export default function QuotationInfoSection({
   onChange,
   divisions,
   paymentTerms,
-  deliveryTerms,
   enquirySources,
   engineers,
 }) {
@@ -90,20 +87,18 @@ export default function QuotationInfoSection({
           error={errors["quotation.paymentTerms"]}
           onChange={(val) => onChange("paymentTerms", val)}
         />
-        <Select
+        <Input
           label="Quotation Validity"
           required
-          placeholder="Select validity"
-          options={QUOTATION_VALIDITY_OPTIONS}
+          placeholder="e.g. 7 Days, 15 Days, 30 Days, Till Stock Available, Immediate"
           value={values.quotationValidity}
           error={errors["quotation.quotationValidity"]}
           onChange={(e) => onChange("quotationValidity", e.target.value)}
         />
-        <Select
+        <Input
           label="Terms Of Delivery"
           required
-          placeholder="Select delivery terms"
-          options={deliveryTerms}
+          placeholder="e.g. Ex-Works, FOB, Door Delivery, CIF"
           value={values.termsOfDelivery}
           error={errors["quotation.termsOfDelivery"]}
           onChange={(e) => onChange("termsOfDelivery", e.target.value)}

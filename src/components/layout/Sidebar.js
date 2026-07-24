@@ -2,13 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, FileSpreadsheet, X, Users, Package } from "lucide-react";
+import { FileText, FileSpreadsheet, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 const NAV_ITEMS = [
   { label: "Quotations", href: "/quotations", icon: FileText },
-  { label: "Customers", href: "/customers", icon: Users },
-  { label: "Parts", href: "/parts", icon: Package },
 ];
 
 export default function Sidebar({ open, onClose }) {

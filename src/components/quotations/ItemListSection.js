@@ -1,7 +1,6 @@
 "use client";
 
-import { Plus, ExternalLink } from "lucide-react";
-import Link from "next/link";
+import { Plus } from "lucide-react";
 import { CardHeader, CardBody } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
@@ -15,18 +14,9 @@ export default function ItemListSection({ items, errors, onAdd, onRemove, onChan
         title="Item List"
         description="Add every part included in this quotation."
         action={
-          <div className="flex items-center gap-2">
-            <Link
-              href="/parts"
-              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-accent-600 hover:bg-accent-50 transition-colors"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              View Parts
-            </Link>
-            <Badge tone="accent">
-              {items.length} {items.length === 1 ? "item" : "items"}
-            </Badge>
-          </div>
+          <Badge tone="accent">
+            {items.length} {items.length === 1 ? "item" : "items"}
+          </Badge>
         }
       />
       <CardBody className="space-y-4">

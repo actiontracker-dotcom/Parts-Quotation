@@ -13,9 +13,8 @@ export async function GET(request) {
     }
 
     const matched = await searchParts(q.trim());
-    const sliced = matched.slice(0, 10);
 
-    return NextResponse.json({ success: true, data: sliced });
+    return NextResponse.json({ success: true, data: matched });
   } catch (error) {
     console.error("[parts/search] Error:", error.message);
     return NextResponse.json(

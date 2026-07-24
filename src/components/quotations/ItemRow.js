@@ -22,19 +22,9 @@ function ItemRow({ index, row, errors, onChange, onRemove, canRemove }) {
     onChange(row.id, "partNumber", part.partNo || "");
     onChange(row.id, "partDescription", part.description || "");
     onChange(row.id, "priceWef", toDateStr(part.applicableDate));
-    if (part.stockStatus) {
-      onChange(row.id, "availability", part.stockStatus);
-    }
-  }, [row.id, onChange]);
-
-  const handleStockSelect = useCallback((part) => {
+    onChange(row.id, "availability", part.stockStatus || "");
+    onChange(row.id, "unitPrice", part.standardRate != null ? String(part.standardRate) : "");
     onChange(row.id, "liveStock", part.totalQty != null ? String(part.totalQty) : "");
-    if (part.standardRate != null) {
-      onChange(row.id, "unitPrice", String(part.standardRate));
-    }
-    if (part.stockStatus) {
-      onChange(row.id, "availability", part.stockStatus);
-    }
   }, [row.id, onChange]);
 
   return (
@@ -140,13 +130,12 @@ function ItemRow({ index, row, errors, onChange, onRemove, canRemove }) {
           error={errors[`items.${index}.priceWef`]}
           onChange={(e) => onChange(row.id, "priceWef", e.target.value)}
         />
-        <PartAutocomplete
+        <Input
           label="Live Stock"
-          placeholder="Search part for stock..."
+          placeholder="Auto-filled from part selection"
           value={row.liveStock}
           error={errors[`items.${index}.liveStock`]}
-          onChange={(val) => onChange(row.id, "liveStock", val)}
-          onSelect={handleStockSelect}
+          readOnly
         />
       </div>
     </div>

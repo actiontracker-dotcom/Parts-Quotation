@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils/cn";
 import { filledFieldStyle } from "@/lib/utils/filledFieldStyle";
 
 const searchCache = new Map();
-const MAX_CACHE_SIZE = 50;
+const MAX_CACHE_SIZE = 100;
 
 function setCache(key, value) {
   if (searchCache.size >= MAX_CACHE_SIZE) {
@@ -18,17 +18,7 @@ function setCache(key, value) {
 
 function getCached(query) {
   const q = query.toLowerCase();
-  if (searchCache.has(q)) return searchCache.get(q);
-  for (const [key, results] of searchCache) {
-    if (q.startsWith(key) && results.length > 0) {
-      const filtered = results.filter(
-        (item) => item.partNo.toLowerCase().includes(q)
-      ).slice(0, 10);
-      setCache(q, filtered);
-      return filtered;
-    }
-  }
-  return null;
+  return searchCache.has(q) ? searchCache.get(q) : null;
 }
 
 export default function PartAutocomplete({
@@ -89,10 +79,9 @@ export default function PartAutocomplete({
       .then((res) => res.json())
       .then((json) => {
         if (json.success) {
-          const sliced = json.data.slice(0, 10);
-          setCache(trimmed.toLowerCase(), sliced);
-          setSuggestions(sliced);
-          setShowDropdown(sliced.length > 0);
+          setCache(trimmed.toLowerCase(), json.data);
+          setSuggestions(json.data);
+          setShowDropdown(json.data.length > 0);
           setHighlightIndex(-1);
         } else {
           setSuggestions([]);

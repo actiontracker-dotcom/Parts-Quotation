@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { Plus, ExternalLink } from "lucide-react";
-import Link from "next/link";
+import { Plus } from "lucide-react";
 import { CardHeader, CardBody } from "@/components/ui/Card";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
 import Input from "@/components/ui/Input";
@@ -50,18 +49,9 @@ export default function CustomerInfoSection({
         title="Customer Information"
         description="Who is this quotation for, and who should receive it."
         action={
-          <div className="flex items-center gap-2">
-            <Link
-              href="/customers"
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-sm font-semibold border border-ink-100 text-ink-600 hover:bg-ink-50 hover:text-ink-800 transition-colors"
-            >
-              <ExternalLink className="h-4 w-4" />
-              View Customers
-            </Link>
-            <Button variant="subtle" size="sm" icon={Plus} onClick={onAddCustomer}>
-              Add Customer
-            </Button>
-          </div>
+          <Button variant="subtle" size="sm" icon={Plus} onClick={onAddCustomer}>
+            Add Customer
+          </Button>
         }
       />
       <CardBody className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -138,7 +128,6 @@ export default function CustomerInfoSection({
         />
         <Input
           label="User ID"
-          required
           placeholder="Sales executive ID"
           value={values.userId}
           error={errors["customer.userId"]}

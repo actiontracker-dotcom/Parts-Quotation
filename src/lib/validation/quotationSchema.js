@@ -24,7 +24,7 @@ export const customerInfoSchema = z.object({
     }),
   location: z.string().trim().optional().default(""),
   engineerRemark: z.string().trim().optional().default(""),
-  userId: z.string().trim().min(1, "User ID is required"),
+  userId: z.string().trim().optional().default(""),
 });
 
 export const quotationInfoSchema = z.object({
