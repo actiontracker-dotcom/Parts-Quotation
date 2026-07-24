@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
-import Location from "@/lib/models/Location";
+
+export const dynamic = "force-dynamic";
+
+const LOCATIONS = [
+  { value: "Raipur", label: "Raipur" },
+  { value: "Raigarh", label: "Raigarh" },
+  { value: "Ambikapur", label: "Ambikapur" },
+  { value: "Satna", label: "Satna" },
+];
 
 export async function GET() {
   try {
-    await connectDB();
-    const locations = await Location.find().sort({ label: 1 }).lean();
-    const result = locations.map((l) => ({ value: l.value, label: l.label }));
-    return NextResponse.json({ success: true, data: result });
+    return NextResponse.json({ success: true, data: LOCATIONS });
   } catch (error) {
     console.error("[master/locations] Error:", error.message);
     return NextResponse.json(

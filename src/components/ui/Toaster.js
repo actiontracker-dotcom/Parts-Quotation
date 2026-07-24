@@ -54,7 +54,7 @@ export default function Toaster({ toasts, onDismiss }) {
               <button
                 type="button"
                 onClick={() => onDismiss(t.id)}
-                className="rounded-md p-1 text-ink-300 transition hover:bg-ink-50 hover:text-ink-600"
+                className="rounded-md p-1 text-ink-300 transition hover:bg-ink-50 hover:text-ink-600 cursor-pointer"
                 aria-label="Dismiss notification"
               >
                 <X className="h-4 w-4" />

@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
-import PaymentTerm from "@/lib/models/PaymentTerm";
+import { PAYMENT_TERMS } from "@/constants/masterData";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await connectDB();
-    const terms = await PaymentTerm.find().sort({ label: 1 }).lean();
-    const result = terms.map((t) => ({ value: t.value, label: t.label }));
-    return NextResponse.json({ success: true, data: result });
+    return NextResponse.json({ success: true, data: PAYMENT_TERMS });
   } catch (error) {
     console.error("[master/payment-terms] Error:", error.message);
     return NextResponse.json(

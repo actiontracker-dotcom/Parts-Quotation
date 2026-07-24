@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, FileSpreadsheet, X } from "lucide-react";
+import { FileText, FileSpreadsheet, X, Users, Package } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 const NAV_ITEMS = [
   { label: "Quotations", href: "/quotations", icon: FileText },
+  { label: "Customers", href: "/customers", icon: Users },
+  { label: "Parts", href: "/parts", icon: Package },
 ];
 
 export default function Sidebar({ open, onClose }) {
@@ -18,7 +20,7 @@ export default function Sidebar({ open, onClose }) {
         <button
           aria-label="Close navigation"
           onClick={onClose}
-          className="fixed inset-0 z-40 bg-ink-950/40 lg:hidden"
+          className="fixed inset-0 z-40 bg-ink-950/40 lg:hidden cursor-pointer"
         />
       )}
       <aside
@@ -41,7 +43,7 @@ export default function Sidebar({ open, onClose }) {
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-ink-300 hover:bg-ink-800 hover:text-white lg:hidden"
+            className="rounded-md p-1 text-ink-300 hover:bg-ink-800 hover:text-white lg:hidden cursor-pointer"
             aria-label="Close navigation"
           >
             <X className="h-5 w-5" />

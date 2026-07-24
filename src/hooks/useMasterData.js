@@ -2,12 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-async function fetchMaster(endpoint) {
-  const res = await fetch(endpoint);
-  const json = await res.json();
-  return json.success ? json.data : [];
-}
-
 export function useMasterData() {
   const [divisions, setDivisions] = useState([]);
   const [paymentTerms, setPaymentTerms] = useState([]);
@@ -23,22 +17,20 @@ export function useMasterData() {
     setLoading(true);
     setError(null);
 
-    Promise.all([
-      fetchMaster("/api/master/divisions"),
-      fetchMaster("/api/master/payment-terms"),
-      fetchMaster("/api/master/delivery-terms"),
-      fetchMaster("/api/master/enquiry-sources"),
-      fetchMaster("/api/master/locations"),
-      fetchMaster("/api/master/engineers"),
-    ])
-      .then(([d, pt, dt, es, l, e]) => {
+    fetch("/api/master")
+      .then((res) => res.json())
+      .then((json) => {
         if (cancelled) return;
-        setDivisions(d);
-        setPaymentTerms(pt);
-        setDeliveryTerms(dt);
-        setEnquirySources(es);
-        setLocations(l);
-        setEngineers(e);
+        if (json.success) {
+          setDivisions(json.data.divisions || []);
+          setPaymentTerms(json.data.paymentTerms || []);
+          setDeliveryTerms(json.data.deliveryTerms || []);
+          setEnquirySources(json.data.enquirySources || []);
+          setLocations(json.data.locations || []);
+          setEngineers(json.data.engineers || []);
+        } else {
+          setError(json.message || "Failed to fetch master data.");
+        }
       })
       .catch((err) => {
         if (cancelled) return;

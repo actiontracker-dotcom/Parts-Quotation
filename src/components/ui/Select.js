@@ -26,7 +26,7 @@ const Select = forwardRef(function Select(
           ref={ref}
           id={id}
           className={cn(
-            "h-10 w-full appearance-none rounded-lg border bg-white pl-3 pr-9 text-sm text-ink-800",
+            "h-10 w-full appearance-none rounded-lg border bg-white pl-3 pr-9 text-sm text-ink-800 cursor-pointer",
             "transition-colors duration-150",
             error
               ? "border-danger-300 focus:ring-danger-400"

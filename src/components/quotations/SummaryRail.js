@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ReceiptText, Send } from "lucide-react";
+import { ReceiptText, Send, FileDown } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { formatCurrency } from "@/lib/utils/formatters";
 import { cn } from "@/lib/utils/cn";
@@ -15,7 +15,8 @@ function LedgerLine({ label, value, muted }) {
   );
 }
 
-export default function SummaryRail({ totals, submitting, onSubmit }) {
+export default function SummaryRail({ totals, submitting, onSubmit, customer, quotation, items, quotationId }) {
+  const [downloading, setDownloading] = useState(false);
   const [pulse, setPulse] = useState(false);
   const prevTotal = useRef(totals.grandTotal);
 
@@ -61,7 +62,24 @@ export default function SummaryRail({ totals, submitting, onSubmit }) {
           <LedgerLine label="Discount" value={`- ${formatCurrency(totals.discountTotal)}`} muted />
         </div>
 
-        <div className="border-t border-ink-100 px-6 py-5">
+        <div className="border-t border-ink-100 px-6 py-5 space-y-3">
+          <Button
+            variant="secondary"
+            size="md"
+            icon={FileDown}
+            loading={downloading}
+            onClick={async () => {
+              setDownloading(true);
+              const { generateQuotationPdf } = await import(
+                "@/lib/utils/generatePdf"
+              );
+              generateQuotationPdf({ customer, quotation, items, quotationId });
+              setDownloading(false);
+            }}
+            className="w-full"
+          >
+            {downloading ? "Generating..." : "Download PDF"}
+          </Button>
           <Button
             variant="primary"
             size="lg"
@@ -72,7 +90,7 @@ export default function SummaryRail({ totals, submitting, onSubmit }) {
           >
             {submitting ? "Submitting" : "Submit Quotation"}
           </Button>
-          <p className="mt-3 text-center text-xs text-ink-300">
+          <p className="text-center text-xs text-ink-300">
             Saved directly to your Google Sheet on submit.
           </p>
         </div>

@@ -1,100 +1,46 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
+import { Plus, ExternalLink } from "lucide-react";
+import Link from "next/link";
 import { CardHeader, CardBody } from "@/components/ui/Card";
+import AutocompleteInput from "@/components/ui/AutocompleteInput";
 import Input from "@/components/ui/Input";
+import SearchableDropdown from "@/components/ui/SearchableDropdown";
 import Select from "@/components/ui/Select";
 import Textarea from "@/components/ui/Textarea";
-import { Loader2, Search, X } from "lucide-react";
+import Button from "@/components/ui/Button";
+import { DESIGNATIONS } from "@/constants/masterData";
 
-export default function CustomerInfoSection({ values, errors, onChange, locations }) {
-  const [companySearch, setCompanySearch] = useState("");
-  const [companies, setCompanies] = useState([]);
-  const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
-  const [loadingCompanies, setLoadingCompanies] = useState(false);
-  const [selectedCompany, setSelectedCompany] = useState(null);
-  const [selectedContactId, setSelectedContactId] = useState("");
-  const [contacts, setContacts] = useState([]);
-  const [loadingContacts, setLoadingContacts] = useState(false);
-  const companyRef = useRef(null);
-  const searchTimer = useRef(null);
+export default function CustomerInfoSection({
+  values,
+  errors,
+  onChange,
+  locations,
+  onAddCustomer,
+}) {
+  const searchCustomers = useCallback(async (query, { signal } = {}) => {
+    const res = await fetch(
+      `/api/customers/search?q=${encodeURIComponent(query)}`,
+      { signal }
+    );
+    const json = await res.json();
+    return json.success ? json.data : [];
+  }, []);
 
-  useEffect(() => {
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-
-    if (!companySearch.trim()) {
-      setCompanies([]);
-      return;
-    }
-
-    searchTimer.current = setTimeout(() => {
-      setLoadingCompanies(true);
-      fetch(`/api/master/companies?search=${encodeURIComponent(companySearch.trim())}&limit=20`)
-        .then((r) => r.json())
-        .then((json) => {
-          if (json.success) setCompanies(json.data);
-          else setCompanies([]);
-        })
-        .catch(() => setCompanies([]))
-        .finally(() => setLoadingCompanies(false));
-    }, 300);
-
-    return () => {
-      if (searchTimer.current) clearTimeout(searchTimer.current);
-    };
-  }, [companySearch]);
-
-  useEffect(() => {
-    if (!selectedCompany) {
-      setContacts([]);
-      setSelectedContactId("");
-      return;
-    }
-
-    setLoadingContacts(true);
-    fetch(`/api/master/contacts?companyId=${selectedCompany._id}`)
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.success) setContacts(json.data);
-        else setContacts([]);
-      })
-      .catch(() => setContacts([]))
-      .finally(() => setLoadingContacts(false));
-  }, [selectedCompany]);
-
-  function handleSelectCompany(company) {
-    setSelectedCompany(company);
-    setSelectedContactId("");
-    setCompanySearch(company.name);
-    setShowCompanyDropdown(false);
-
-    onChange("customerName", company.name);
-    const addrParts = [company.address].filter(Boolean);
-    if (company.gst) addrParts.push(`GSTIN: ${company.gst}`);
-    onChange("fullAddressGst", addrParts.join("\n"));
-    if (company.location) onChange("location", company.location);
-  }
-
-  function handleClearCompany() {
-    setSelectedCompany(null);
-    setCompanySearch("");
-    setCompanies([]);
-    setContacts([]);
-    setSelectedContactId("");
-    onChange("customerName", "");
-    onChange("fullAddressGst", "");
-    onChange("location", "");
-  }
-
-  function handleSelectContact(contactId) {
-    setSelectedContactId(contactId);
-    const contact = contacts.find((c) => c._id === contactId);
-    if (!contact) return;
-
-    onChange("contactPerson", contact.name);
-    onChange("emailTo", contact.email);
-    onChange("contactNumber", contact.mobile);
-    onChange("designation", contact.designation);
+  function handleSelectCustomer(customer) {
+    onChange("customerName", customer.customerName);
+    onChange(
+      "fullAddressGst",
+      customer.fullAddressWithGST ||
+        [customer.fullAddress, customer.gstNo && `GSTIN: ${customer.gstNo}`]
+          .filter(Boolean)
+          .join("\n")
+    );
+    if (customer.contactPerson) onChange("contactPerson", customer.contactPerson);
+    if (customer.contactNumber) onChange("contactNumber", customer.contactNumber);
+    if (customer.designation) onChange("designation", customer.designation);
+    if (customer.email) onChange("emailTo", customer.email);
   }
 
   return (
@@ -103,98 +49,42 @@ export default function CustomerInfoSection({ values, errors, onChange, location
         eyebrow="Step 1"
         title="Customer Information"
         description="Who is this quotation for, and who should receive it."
+        action={
+          <div className="flex items-center gap-2">
+            <Link
+              href="/customers"
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-sm font-semibold border border-ink-100 text-ink-600 hover:bg-ink-50 hover:text-ink-800 transition-colors"
+            >
+              <ExternalLink className="h-4 w-4" />
+              View Customers
+            </Link>
+            <Button variant="subtle" size="sm" icon={Plus} onClick={onAddCustomer}>
+              Add Customer
+            </Button>
+          </div>
+        }
       />
       <CardBody className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <div className="relative sm:col-span-2" ref={companyRef}>
-          <label className="text-sm font-medium text-ink-600 flex items-center gap-1 mb-1.5">
-            Company
-          </label>
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-300" />
-            <input
-              type="text"
-              className="h-10 w-full rounded-lg border border-ink-100 bg-white pl-9 pr-9 text-sm text-ink-800 placeholder:text-ink-300 transition-colors hover:border-ink-200 focus:border-accent-400 focus:outline-none focus:ring-2 focus:ring-accent-400 focus:ring-offset-2 focus:ring-offset-surface"
-              placeholder="Search company..."
-              value={companySearch}
-              onChange={(e) => {
-                setCompanySearch(e.target.value);
-                setShowCompanyDropdown(true);
-                if (selectedCompany) handleClearCompany();
-              }}
-              onFocus={() => {
-                if (companySearch.trim()) setShowCompanyDropdown(true);
-              }}
-            />
-            {companySearch && (
-              <button
-                type="button"
-                onClick={handleClearCompany}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-300 hover:text-ink-500"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-
-          {showCompanyDropdown && companySearch.trim() && (
-            <div className="absolute z-50 mt-1 w-full rounded-lg border border-ink-100 bg-white shadow-card-hover max-h-60 overflow-y-auto">
-              {loadingCompanies ? (
-                <div className="flex items-center justify-center gap-2 px-4 py-6 text-sm text-ink-400">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Searching...
-                </div>
-              ) : companies.length === 0 ? (
-                <p className="px-4 py-6 text-center text-sm text-ink-300">
-                  No companies found
-                </p>
-              ) : (
-                companies.map((c) => (
-                  <button
-                    key={c._id}
-                    type="button"
-                    className="w-full px-4 py-2.5 text-left text-sm text-ink-700 hover:bg-accent-50 hover:text-accent-700 transition-colors border-b border-ink-50 last:border-0"
-                    onClick={() => handleSelectCompany(c)}
-                  >
-                    <span className="font-medium">{c.name}</span>
-                    {c.location && (
-                      <span className="ml-2 text-xs text-ink-400">{c.location}</span>
-                    )}
-                  </button>
-                ))
-              )}
-            </div>
-          )}
+        <div className="sm:col-span-2">
+          <AutocompleteInput
+            label="Customer Name"
+            required
+            placeholder="Acme Engineering Pvt. Ltd."
+            value={values.customerName}
+            onChange={(val) => onChange("customerName", val)}
+            onSelect={handleSelectCustomer}
+            fetchSuggestions={searchCustomers}
+            error={errors["customer.customerName"]}
+          />
         </div>
 
         <Input
-          label="Customer Name"
-          required
-          placeholder="Acme Engineering Pvt. Ltd."
-          value={values.customerName}
-          error={errors["customer.customerName"]}
-          onChange={(e) => onChange("customerName", e.target.value)}
+          label="Contact Person"
+          placeholder="Rohit Sharma"
+          value={values.contactPerson}
+          error={errors["customer.contactPerson"]}
+          onChange={(e) => onChange("contactPerson", e.target.value)}
         />
-
-        {selectedCompany ? (
-          <Select
-            label="Contact Person"
-            required
-            placeholder={loadingContacts ? "Loading contacts..." : "Select contact"}
-            options={contacts.map((c) => ({ value: c._id, label: c.name }))}
-            value={selectedContactId}
-            onChange={(e) => handleSelectContact(e.target.value)}
-            hint={contacts.length === 0 && !loadingContacts ? "No contacts for this company" : undefined}
-          />
-        ) : (
-          <Input
-            label="Contact Person"
-            required
-            placeholder="Rohit Sharma"
-            value={values.contactPerson}
-            error={errors["customer.contactPerson"]}
-            onChange={(e) => onChange("contactPerson", e.target.value)}
-          />
-        )}
 
         <Textarea
           label="Full Address with GST"
@@ -208,18 +98,18 @@ export default function CustomerInfoSection({ values, errors, onChange, location
         />
         <Input
           label="Contact Number"
-          required
           placeholder="+91 98765 43210"
           value={values.contactNumber}
           error={errors["customer.contactNumber"]}
           onChange={(e) => onChange("contactNumber", e.target.value)}
         />
-        <Input
+        <SearchableDropdown
           label="Designation"
           placeholder="Procurement Manager"
+          items={DESIGNATIONS}
           value={values.designation}
           error={errors["customer.designation"]}
-          onChange={(e) => onChange("designation", e.target.value)}
+          onChange={(val) => onChange("designation", val)}
         />
         <Input
           label="Email ID To"

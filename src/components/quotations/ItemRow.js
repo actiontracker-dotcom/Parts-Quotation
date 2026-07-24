@@ -1,13 +1,41 @@
 "use client";
 
+import { useCallback } from "react";
 import { Trash2 } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
+import PartAutocomplete from "@/components/quotations/PartAutocomplete";
 import { AVAILABILITY_OPTIONS } from "@/lib/constants/quotationOptions";
 import { computeLineTotal, formatCurrency } from "@/lib/utils/formatters";
 
-export default function ItemRow({ index, row, errors, onChange, onRemove, canRemove }) {
+function toDateStr(dateVal) {
+  if (!dateVal) return "";
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return "";
+  return d.toISOString().split("T")[0];
+}
+
+function ItemRow({ index, row, errors, onChange, onRemove, canRemove }) {
   const lineTotal = computeLineTotal(row);
+
+  const handlePartSelect = useCallback((part) => {
+    onChange(row.id, "partNumber", part.partNo || "");
+    onChange(row.id, "partDescription", part.description || "");
+    onChange(row.id, "priceWef", toDateStr(part.applicableDate));
+    if (part.stockStatus) {
+      onChange(row.id, "availability", part.stockStatus);
+    }
+  }, [row.id, onChange]);
+
+  const handleStockSelect = useCallback((part) => {
+    onChange(row.id, "liveStock", part.totalQty != null ? String(part.totalQty) : "");
+    if (part.standardRate != null) {
+      onChange(row.id, "unitPrice", String(part.standardRate));
+    }
+    if (part.stockStatus) {
+      onChange(row.id, "availability", part.stockStatus);
+    }
+  }, [row.id, onChange]);
 
   return (
     <div className="group relative rounded-lg border border-ink-100 bg-surface-sunken/40 p-4 transition-colors hover:border-accent-200 sm:p-5">
@@ -26,7 +54,7 @@ export default function ItemRow({ index, row, errors, onChange, onRemove, canRem
             type="button"
             onClick={() => onRemove(row.id)}
             disabled={!canRemove}
-            className="rounded-md p-1.5 text-ink-300 transition hover:bg-danger-50 hover:text-danger-500 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+            className="rounded-md p-1.5 text-ink-300 transition hover:bg-danger-50 hover:text-danger-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
             aria-label={`Remove item ${index + 1}`}
           >
             <Trash2 className="h-4 w-4" />
@@ -35,13 +63,14 @@ export default function ItemRow({ index, row, errors, onChange, onRemove, canRem
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Input
+        <PartAutocomplete
           label="Part Number"
           required
-          placeholder="PN-10023"
+          placeholder="Search part number..."
           value={row.partNumber}
           error={errors[`items.${index}.partNumber`]}
-          onChange={(e) => onChange(row.id, "partNumber", e.target.value)}
+          onChange={(val) => onChange(row.id, "partNumber", val)}
+          onSelect={handlePartSelect}
         />
         <Input
           label="Part Description"
@@ -111,17 +140,17 @@ export default function ItemRow({ index, row, errors, onChange, onRemove, canRem
           error={errors[`items.${index}.priceWef`]}
           onChange={(e) => onChange(row.id, "priceWef", e.target.value)}
         />
-        <Input
+        <PartAutocomplete
           label="Live Stock"
-          type="number"
-          min="0"
-          step="1"
-          placeholder="Units available"
+          placeholder="Search part for stock..."
           value={row.liveStock}
           error={errors[`items.${index}.liveStock`]}
-          onChange={(e) => onChange(row.id, "liveStock", e.target.value)}
+          onChange={(val) => onChange(row.id, "liveStock", val)}
+          onSelect={handleStockSelect}
         />
       </div>
     </div>
   );
 }
+
+export default ItemRow;

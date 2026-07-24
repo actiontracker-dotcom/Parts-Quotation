@@ -2,6 +2,7 @@
 
 import { forwardRef, useId } from "react";
 import { cn } from "@/lib/utils/cn";
+import { filledFieldStyle } from "@/lib/utils/filledFieldStyle";
 import FieldShell from "@/components/ui/FieldShell";
 
 const Input = forwardRef(function Input(
@@ -10,6 +11,7 @@ const Input = forwardRef(function Input(
 ) {
   const generatedId = useId();
   const id = props.id || generatedId;
+  const hasValue = props.value !== undefined && props.value !== null && props.value !== "";
 
   return (
     <FieldShell
@@ -28,12 +30,9 @@ const Input = forwardRef(function Input(
           ref={ref}
           id={id}
           className={cn(
-            "h-10 w-full rounded-lg border bg-white text-sm text-ink-800 placeholder:text-ink-300",
-            "px-3 transition-colors duration-150",
+            "h-10 w-full rounded-lg border px-3 text-sm placeholder:text-ink-300 transition-all duration-200 cursor-text",
             Icon && "pl-9",
-            error
-              ? "border-danger-300 focus:ring-danger-400"
-              : "border-ink-100 hover:border-ink-200 focus:border-accent-400",
+            filledFieldStyle(hasValue, !!error),
             className
           )}
           aria-invalid={!!error}

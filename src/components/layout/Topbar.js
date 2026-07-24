@@ -8,7 +8,7 @@ export default function Topbar({ onMenuClick, breadcrumb, title }) {
       <div className="flex items-center gap-3">
         <button
           onClick={onMenuClick}
-          className="rounded-md p-1.5 text-ink-500 hover:bg-ink-100 lg:hidden"
+          className="rounded-md p-1.5 text-ink-500 hover:bg-ink-100 lg:hidden cursor-pointer"
           aria-label="Open navigation"
         >
           <Menu className="h-5 w-5" />

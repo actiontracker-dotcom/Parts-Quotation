@@ -54,11 +54,4 @@ export async function POST(request) {
   }
 }
 
-export async function GET() {
-  // Placeholder for the future quotations list view - keeps the route
-  // shape ready without wiring up sheet reads yet.
-  return NextResponse.json(
-    { success: false, message: "Listing quotations is not implemented yet." },
-    { status: 501 }
-  );
-}
+
