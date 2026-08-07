@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { X, Loader2, FileDown } from "lucide-react";
 import Button from "@/components/ui/Button";
-import { formatCurrency } from "@/lib/utils/formatters";
+import { formatCurrency, formatDate } from "@/lib/utils/formatters";
 
 export default function QuotationDetailsModal({ quotationNo, onClose }) {
   const [data, setData] = useState(null);
@@ -43,6 +43,17 @@ export default function QuotationDetailsModal({ quotationNo, onClose }) {
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, [onClose]);
+
+  const handleDownload = useCallback(async (d) => {
+    if (!d) return;
+    const { generateQuotationPdf } = await import("@/lib/utils/generatePdf");
+    generateQuotationPdf({
+      customer: d.customer,
+      quotation: d.quotation,
+      items: d.items,
+      quotationId: d.quotationNo,
+    });
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 sm:p-8 overflow-y-auto">
@@ -99,7 +110,7 @@ export default function QuotationDetailsModal({ quotationNo, onClose }) {
                 <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-3">Quotation Information</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   <InfoItem label="Quotation No" value={data.quotationNo} />
-                  <InfoItem label="Quotation Date" value={data.quotation.quotationDate} />
+                  <InfoItem label="Quotation Date" value={formatDate(data.quotation.quotationDate)} />
                   <InfoItem label="Division" value={data.quotation.division} />
                   <InfoItem label="Source Of Enquiry" value={data.quotation.sourceOfEnquiry} />
                   <InfoItem label="Engineer" value={data.quotation.enquiryGeneratedBy} />
@@ -107,7 +118,7 @@ export default function QuotationDetailsModal({ quotationNo, onClose }) {
                   <InfoItem label="Quotation Validity" value={data.quotation.quotationValidity} />
                   <InfoItem label="Terms Of Delivery" value={data.quotation.termsOfDelivery} />
                   <InfoItem label="Party Ref. No." value={data.quotation.partyReferenceNumber} />
-                  <InfoItem label="Party Ref. Date" value={data.quotation.partyReferenceDate} />
+                  <InfoItem label="Party Ref. Date" value={formatDate(data.quotation.partyReferenceDate)} />
                   <InfoItem label="Follow-up By" value={data.quotation.quotationFollowUpBy} />
                   <InfoItem label="Status" value={data.quotation.status} />
                 </div>
@@ -174,7 +185,12 @@ export default function QuotationDetailsModal({ quotationNo, onClose }) {
           <Button variant="secondary" onClick={onClose}>
             Close
           </Button>
-          <Button variant="subtle" icon={FileDown} disabled>
+          <Button
+            variant="subtle"
+            icon={FileDown}
+            disabled={!data}
+            onClick={() => handleDownload(data)}
+          >
             Download PDF
           </Button>
         </div>

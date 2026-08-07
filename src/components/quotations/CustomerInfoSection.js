@@ -36,10 +36,18 @@ export default function CustomerInfoSection({
           .filter(Boolean)
           .join("\n")
     );
+    onChange("fullAddress", customer.fullAddress || "");
+    onChange("gstNo", customer.gstNo || "");
+    onChange("stateName", customer.stateName || "");
+    onChange("stateCode", customer.stateCode || "");
     if (customer.contactPerson) onChange("contactPerson", customer.contactPerson);
     if (customer.contactNumber) onChange("contactNumber", customer.contactNumber);
     if (customer.designation) onChange("designation", customer.designation);
     if (customer.email) onChange("emailTo", customer.email);
+    if (customer.emailCc) onChange("emailCc", customer.emailCc);
+    if (customer.location) onChange("location", customer.location);
+    if (customer.userId) onChange("userId", customer.userId);
+    if (customer.engineerRemark) onChange("engineerRemark", customer.engineerRemark);
   }
 
   return (

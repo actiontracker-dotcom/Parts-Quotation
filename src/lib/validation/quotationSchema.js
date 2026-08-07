@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_UOM, DEFAULT_GST_RATE } from "@/lib/constants/quotationOptions";
 
 // Split into sub-schemas so future modules (e.g. a standalone "Customer"
 // entity) can reuse pieces without duplicating rules.
@@ -6,6 +7,10 @@ import { z } from "zod";
 export const customerInfoSchema = z.object({
   customerName: z.string().trim().min(1, "Customer name is required"),
   fullAddressGst: z.string().trim().min(1, "Address & GST details are required"),
+  fullAddress: z.string().trim().optional().default(""),
+  gstNo: z.string().trim().optional().default(""),
+  stateName: z.string().trim().optional().default(""),
+  stateCode: z.string().trim().optional().default(""),
   contactPerson: z.string().trim().min(1, "Contact person is required"),
   contactNumber: z
     .string()
@@ -52,6 +57,14 @@ export const itemRowSchema = z.object({
   availability: z.string().trim().optional().default(""),
   priceWef: z.string().trim().optional().default(""),
   liveStock: z.string().trim().optional().default(""),
+  hsnCode: z.string().trim().optional().default(""),
+  uom: z.string().trim().optional().default(DEFAULT_UOM),
+  gstRate: z.string().trim().optional().default(String(DEFAULT_GST_RATE)),
+  group: z.string().trim().optional().default(""),
+  subGroup: z.string().trim().optional().default(""),
+  lastPurchaseDate: z.string().trim().optional().default(""),
+  totalQty: z.string().trim().optional().default(""),
+  totalPrice: z.string().trim().optional().default(""),
 });
 
 export const quotationSchema = z.object({

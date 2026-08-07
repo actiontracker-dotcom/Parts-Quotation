@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, FileSpreadsheet, X } from "lucide-react";
+import Image from "next/image";
+import { FileText, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 const NAV_ITEMS = [
@@ -28,10 +29,14 @@ export default function Sidebar({ open, onClose }) {
         )}
       >
         <div className="flex items-center justify-between px-5 py-6">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-500">
-              <FileSpreadsheet className="h-5 w-5 text-white" />
-            </div>
+          <div className="flex items-center gap-2">
+            <Image
+              src="/logo.png"
+              alt="Company Logo"
+              width={28}
+              height={28}
+              className="object-contain"
+            />
             <div>
               <p className="font-display text-sm font-semibold leading-none text-white">
                 Quotation

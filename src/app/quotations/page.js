@@ -115,7 +115,7 @@ export default function QuotationsPage() {
                     <tr key={i}>
                       {Array.from({ length: 9 }).map((_, j) => (
                         <td key={j} className="px-4 py-3">
-                          <div className="h-4 bg-ink-100 rounded animate-pulse" style={{ width: `${50 + Math.random() * 50}%` }} />
+                          <div className="h-4 bg-ink-100 rounded animate-pulse" style={{ width: `${65 + ((i * 7 + j * 13) % 30)}%` }} />
                         </td>
                       ))}
                     </tr>

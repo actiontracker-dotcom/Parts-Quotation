@@ -121,7 +121,7 @@ export async function readSheetRange(sheetTab, range) {
 
 export async function appendSheetRows(sheetTab, rows) {
   await sheetsFetch(
-    `/${getSheetId()}/values/${encodeURIComponent(`${sheetTab}!A1`)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    `/${getSheetId()}/values/${encodeURIComponent(`${sheetTab}!A1`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
     {
       method: "POST",
       body: JSON.stringify({ values: rows, majorDimension: "ROWS" }),
@@ -131,7 +131,7 @@ export async function appendSheetRows(sheetTab, rows) {
 
 export async function updateSheetRow(sheetTab, range, values) {
   await sheetsFetch(
-    `/${getSheetId()}/values/${encodeURIComponent(`${sheetTab}!${range}`)}?valueInputOption=USER_ENTERED`,
+    `/${getSheetId()}/values/${encodeURIComponent(`${sheetTab}!${range}`)}?valueInputOption=RAW`,
     {
       method: "PUT",
       body: JSON.stringify({ values, majorDimension: "ROWS" }),

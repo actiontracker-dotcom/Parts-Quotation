@@ -2,6 +2,14 @@
 // Keeping these in one place means new modules (e.g. Customers, Reports)
 // can import the same lists instead of re-declaring them.
 
+// Business rules: UOM is always "Nos" and GST Rate is always 18% for every
+// quotation item. These constants are the single source of truth used by the
+// form, the API, the Google Sheets writer/reader and the PDF, so the value can
+// never drift from user input or the parts master.
+export const DEFAULT_UOM = "Nos";
+export const DEFAULT_GST_RATE = 18;
+
+
 export const AVAILABILITY_OPTIONS = [
   { value: "in-stock", label: "In Stock" },
   { value: "made-to-order", label: "Made to Order" },
@@ -35,5 +43,13 @@ export function createEmptyItemRow() {
     availability: "",
     priceWef: "",
     liveStock: "",
+    hsnCode: "",
+    uom: DEFAULT_UOM,
+    gstRate: String(DEFAULT_GST_RATE),
+    group: "",
+    subGroup: "",
+    lastPurchaseDate: "",
+    totalQty: "",
+    totalPrice: "",
   };
 }

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <clipPath id="corner-cut">
+      <path d="M0 0h512v512H0z"/>
+    </clipPath>
+  </defs>
+  
+  <!-- Background - Document shape with folded corner -->
+  <rect x="64" y="32" width="384" height="448" rx="24" fill="#2563EB"/>
+  
+  <!-- Folded corner effect -->
+  <path d="M320 32v128h128" fill="#1D4ED8"/>
+  
+  <!-- White "Q" letter integrated with document lines -->
+  <g fill="#FFFFFF">
+    <!-- Main Q shape -->
+    <path d="M256 128c-70.7 0-128 57.3-128 128s57.3 128 128 128c35.4 0 67.4-14.4 90.7-37.7l-22.6-22.6c-16.5 16.5-39.3 26.7-64.5 26.7-53 0-96-43-96-96s43-96 96-96 96 43 96 96c0 14.1-3.1 27.4-8.6 39.4l28.3 28.3c12.3-20.3 19.3-43.9 19.3-68.9 0-70.7-57.3-128-128-128z"/>
+    
+    <!-- Q tail -->
+    <path d="M336 336l-24 24c-8 8-8 21 0 29l32 32c8 8 21 8 29 0l24-24c8-8 8-21 0-29l-32-32c-8-8-21-8-29 0z"/>
+    
+    <!-- Document lines for quotation feel -->
+    <rect x="160" y="320" width="96" height="12" rx="6" opacity="0.6"/>
+    <rect x="160" y="352" width="64" height="12" rx="6" opacity="0.6"/>
+  </g>
+</svg>

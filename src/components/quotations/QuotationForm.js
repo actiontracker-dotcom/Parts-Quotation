@@ -59,6 +59,10 @@ export default function QuotationForm() {
             .filter(Boolean)
             .join("\n")
       );
+      updateCustomerField("fullAddress", customer.fullAddress || "");
+      updateCustomerField("gstNo", customer.gstNo || "");
+      updateCustomerField("stateName", customer.stateName || "");
+      updateCustomerField("stateCode", customer.stateCode || "");
       if (customer.contactPerson) updateCustomerField("contactPerson", customer.contactPerson);
       if (customer.contactNumber) updateCustomerField("contactNumber", customer.contactNumber);
       if (customer.designation) updateCustomerField("designation", customer.designation);

@@ -9,6 +9,10 @@ import { computeQuotationTotals } from "@/lib/utils/formatters";
 const INITIAL_CUSTOMER = {
   customerName: "",
   fullAddressGst: "",
+  fullAddress: "",
+  gstNo: "",
+  stateName: "",
+  stateCode: "",
   contactPerson: "",
   contactNumber: "",
   designation: "",

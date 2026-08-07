@@ -5,34 +5,6 @@ import { AlertCircle, Loader2, Search } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { filledFieldStyle } from "@/lib/utils/filledFieldStyle";
 
-const searchCache = new Map();
-const MAX_CACHE_SIZE = 50;
-
-function setCache(key, value) {
-  if (searchCache.size >= MAX_CACHE_SIZE) {
-    const first = searchCache.keys().next().value;
-    searchCache.delete(first);
-  }
-  searchCache.set(key, value);
-}
-
-function getCached(query) {
-  const q = query.toLowerCase();
-  if (searchCache.has(q)) return searchCache.get(q);
-  for (const [key, results] of searchCache) {
-    if (q.startsWith(key) && results.length > 0) {
-      const filtered = results.filter(
-        (item) =>
-          item.customerName.toLowerCase().includes(q) ||
-          item.gstNo.toLowerCase().includes(q)
-      ).slice(0, 10);
-      setCache(q, filtered);
-      return filtered;
-    }
-  }
-  return null;
-}
-
 export default function AutocompleteInput({
   label,
   required,
@@ -43,16 +15,18 @@ export default function AutocompleteInput({
   fetchSuggestions,
   error,
   debounceMs = 300,
+  minChars = 3,
   maxSuggestions = 10,
 }) {
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
-  const inputRef = useRef(null);
   const wrapperRef = useRef(null);
-  const timerRef = useRef(null);
+  const debounceTimerRef = useRef(null);
   const abortRef = useRef(null);
+  const lastQueryRef = useRef("");
+  const requestSeqRef = useRef(0);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -65,54 +39,80 @@ export default function AutocompleteInput({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  function doSearch(query) {
-    if (abortRef.current) abortRef.current.abort();
-    const trimmed = query.trim();
-    if (!trimmed) {
-      setSuggestions([]);
-      setShowDropdown(false);
-      setLoading(false);
-      return;
-    }
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      if (abortRef.current) abortRef.current.abort();
+    };
+  }, []);
 
-    const cached = getCached(trimmed);
-    if (cached) {
-      setSuggestions(cached);
-      setShowDropdown(cached.length > 0);
-      setHighlightIndex(-1);
-      return;
+  function cancelPending() {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
     }
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+  }
 
+  async function runSearch(rawQuery) {
+    const query = rawQuery.trim();
+    if (!query) return;
+
+    if (query === lastQueryRef.current) return;
+    lastQueryRef.current = query;
+
+    cancelPending();
+
+    const seq = ++requestSeqRef.current;
     setLoading(true);
     const controller = new AbortController();
     abortRef.current = controller;
 
-    fetchSuggestions(trimmed, { signal: controller.signal })
-      .then((results) => {
-        const sliced = results.slice(0, maxSuggestions);
-        setCache(trimmed.toLowerCase(), sliced);
-        setSuggestions(sliced);
-        setShowDropdown(sliced.length > 0);
-        setHighlightIndex(-1);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    try {
+      const results = await fetchSuggestions(query, {
+        signal: controller.signal,
+      });
+      if (seq !== requestSeqRef.current || controller.signal.aborted) return;
+
+      const sliced = results.slice(0, maxSuggestions);
+      setSuggestions(sliced);
+      setShowDropdown(true);
+      setHighlightIndex(-1);
+    } catch (err) {
+      if (seq !== requestSeqRef.current) return;
+      if (err && err.name === "AbortError") return;
+      lastQueryRef.current = "";
+      setSuggestions([]);
+      setShowDropdown(true);
+    } finally {
+      if (seq === requestSeqRef.current) setLoading(false);
+    }
   }
 
   function handleChange(e) {
     const val = e.target.value;
     onChange(val);
+    setHighlightIndex(-1);
 
-    if (timerRef.current) clearTimeout(timerRef.current);
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
 
-    if (!val.trim()) {
+    const trimmed = val.trim();
+    if (trimmed.length < minChars) {
+      cancelPending();
+      lastQueryRef.current = "";
       setSuggestions([]);
       setShowDropdown(false);
       setLoading(false);
       return;
     }
 
-    timerRef.current = setTimeout(() => doSearch(val), debounceMs);
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      runSearch(val);
+    }, debounceMs);
   }
 
   function handleKeyDown(e) {
@@ -152,6 +152,8 @@ export default function AutocompleteInput({
   }
 
   function selectSuggestion(item) {
+    cancelPending();
+    lastQueryRef.current = "";
     onSelect(item);
     setSuggestions([]);
     setShowDropdown(false);
@@ -177,9 +179,13 @@ export default function AutocompleteInput({
           </label>
         )}
         <div className="relative">
-          <Search className={cn("pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transition-colors", value ? "text-slate-500" : "text-ink-300")} />
+          <Search
+            className={cn(
+              "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transition-colors",
+              value ? "text-slate-500" : "text-ink-300"
+            )}
+          />
           <input
-            ref={inputRef}
             id={generatedId}
             type="text"
             role="combobox"
@@ -221,28 +227,34 @@ export default function AutocompleteInput({
           role="listbox"
           className="absolute z-50 mt-1 w-full rounded-lg border border-ink-100 bg-white shadow-card-hover max-h-60 overflow-y-auto"
         >
-          {suggestions.map((item, index) => (
-            <li
-              key={item._id || index}
-              role="option"
-              aria-selected={index === highlightIndex}
-              className={cn(
-                "flex items-center justify-between px-4 py-2.5 text-sm cursor-pointer transition-colors border-b border-ink-50 last:border-0",
-                index === highlightIndex
-                  ? "bg-accent-50 text-accent-700"
-                  : "text-ink-700 hover:bg-accent-50 hover:text-accent-700"
-              )}
-              onMouseEnter={() => setHighlightIndex(index)}
-              onMouseDown={() => selectSuggestion(item)}
-            >
-              <span className="font-medium">{item.customerName}</span>
-              {item.stateName && (
-                <span className="ml-2 text-xs text-ink-400 flex-shrink-0">
-                  {item.stateName}
-                </span>
-              )}
+          {suggestions.length === 0 ? (
+            <li className="px-4 py-2.5 text-sm text-ink-400">
+              {loading ? "Searching..." : "No matches found"}
             </li>
-          ))}
+          ) : (
+            suggestions.map((item, index) => (
+              <li
+                key={item._id || index}
+                role="option"
+                aria-selected={index === highlightIndex}
+                className={cn(
+                  "flex items-center justify-between px-4 py-2.5 text-sm cursor-pointer transition-colors border-b border-ink-50 last:border-0",
+                  index === highlightIndex
+                    ? "bg-accent-50 text-accent-700"
+                    : "text-ink-700 hover:bg-accent-50 hover:text-accent-700"
+                )}
+                onMouseEnter={() => setHighlightIndex(index)}
+                onMouseDown={() => selectSuggestion(item)}
+              >
+                <span className="font-medium">{item.customerName}</span>
+                {item.stateName && (
+                  <span className="ml-2 text-xs text-ink-400 flex-shrink-0">
+                    {item.stateName}
+                  </span>
+                )}
+              </li>
+            ))
+          )}
         </ul>
       )}
     </div>

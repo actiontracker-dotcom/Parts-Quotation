@@ -5,7 +5,7 @@ import { Trash2 } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import PartAutocomplete from "@/components/quotations/PartAutocomplete";
-import { AVAILABILITY_OPTIONS } from "@/lib/constants/quotationOptions";
+import { AVAILABILITY_OPTIONS, DEFAULT_UOM, DEFAULT_GST_RATE } from "@/lib/constants/quotationOptions";
 import { computeLineTotal, formatCurrency } from "@/lib/utils/formatters";
 
 function toDateStr(dateVal) {
@@ -25,6 +25,14 @@ function ItemRow({ index, row, errors, onChange, onRemove, canRemove }) {
     onChange(row.id, "availability", part.stockStatus || "");
     onChange(row.id, "unitPrice", part.standardRate != null ? String(part.standardRate) : "");
     onChange(row.id, "liveStock", part.totalQty != null ? String(part.totalQty) : "");
+    onChange(row.id, "hsnCode", part.hsnCode || "");
+    onChange(row.id, "uom", DEFAULT_UOM);
+    onChange(row.id, "gstRate", String(DEFAULT_GST_RATE));
+    onChange(row.id, "group", part.group || "");
+    onChange(row.id, "subGroup", part.subGroup || "");
+    onChange(row.id, "lastPurchaseDate", part.lastPurchaseDate != null ? String(part.lastPurchaseDate) : "");
+    onChange(row.id, "totalQty", part.totalQty != null ? String(part.totalQty) : "");
+    onChange(row.id, "totalPrice", part.totalPrice != null ? String(part.totalPrice) : "");
   }, [row.id, onChange]);
 
   return (
@@ -122,6 +130,20 @@ function ItemRow({ index, row, errors, onChange, onRemove, canRemove }) {
           value={row.discount}
           error={errors[`items.${index}.discount`]}
           onChange={(e) => onChange(row.id, "discount", e.target.value)}
+        />
+        <Input
+          label="UOM"
+          placeholder="Auto-filled as Nos"
+          value={row.uom || DEFAULT_UOM}
+          error={errors[`items.${index}.uom`]}
+          readOnly
+        />
+        <Input
+          label="GST (%)"
+          placeholder="Auto-filled as 18%"
+          value={row.gstRate || String(DEFAULT_GST_RATE)}
+          error={errors[`items.${index}.gstRate`]}
+          readOnly
         />
         <Input
           label="Price (W.E.F.)"

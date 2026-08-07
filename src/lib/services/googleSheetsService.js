@@ -1,5 +1,6 @@
 import { readSheetRange, appendSheetRows, updateSheetRow, clearSheetRange, prewarmAuth } from "./googleSheetsClient.js";
-import { toNumber, computeLineTotal } from "../utils/formatters.js";
+import { toNumber, computeLineTotal, computeGstAmount } from "../utils/formatters.js";
+import { DEFAULT_UOM, DEFAULT_GST_RATE } from "../constants/quotationOptions.js";
 
 const CUSTOMER_SHEET_TAB = "Quotation";
 const PARTS_SHEET_TAB = "Parts Details";
@@ -66,6 +67,12 @@ let partsCache = null;
 let partsHeaders = null;
 let partsLoadPromise = null;
 
+let customerHistoryCache = null;
+let customerHistoryLoadPromise = null;
+
+let dataHeadersCache = null;
+let dataHeadersLoadPromise = null;
+
 // ─── CROSS-INSTANCE CACHE SHARING ───────────────────────────────────────────────
 // Next.js gives each route handler its own module instance in dev (webpack).
 // We use globalThis to share the loaded cache across all instances,
@@ -90,6 +97,10 @@ function restoreGlobalCache() {
     dataHeadersCache = sc.dataHeaders;
     restored = true;
   }
+  if (sc.customerHistory && !customerHistoryCache) {
+    customerHistoryCache = sc.customerHistory;
+    restored = true;
+  }
   return restored;
 }
 
@@ -99,6 +110,7 @@ function storeGlobalCache() {
     customers: customersCache ? { cache: customersCache, headers: customersHeaders } : undefined,
     parts: partsCache ? { cache: partsCache, headers: partsHeaders } : undefined,
     dataHeaders: dataHeadersCache || undefined,
+    customerHistory: customerHistoryCache || undefined,
   };
 }
 
@@ -215,6 +227,122 @@ async function ensureCustomersLoaded() {
     customersLoadPromise = null;
     setGlobalLoading("customers", null);
   }
+}
+
+// ─── CUSTOMER HISTORY (DATA-sheet fallback) ──────────────────────────────
+// The customer master tab ("Quotation") only holds six columns. Contact and
+// extended attributes live in the history tab ("DATA"). To auto-fill a form
+// with the fullest possible picture of a customer, we index the latest row
+// per customer name from DATA and merge it into the master row, filling only
+// the fields the master does not provide. The history is indexed once and
+// cached exactly like the customer/part masters.
+
+const CUSTOMER_HISTORY_COLUMN_MAP = {
+  fullAddressWithGST: "Full Address with GST",
+  fullAddress: "Full Address",
+  gstNo: "GST NO.#",
+  stateName: "State Name",
+  stateCode: "State Code",
+  contactPerson: "Contact Person",
+  contactNumber: "Contact Number",
+  designation: "Designation",
+  email: "Email Id To",
+  emailCc: "Email CC",
+  location: "Location",
+  userId: "User ID",
+  engineerRemark: "Engineer Remark",
+};
+
+function customerHistoryTime(raw) {
+  if (!raw) return -1;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? -1 : parsed.getTime();
+}
+
+function isNewerCustomerHistoryEntry(candidate, current) {
+  return (
+    customerHistoryTime(candidate.quotationDate || candidate.timestamp) >
+    customerHistoryTime(current.quotationDate || current.timestamp)
+  );
+}
+
+async function ensureCustomerHistoryLoaded() {
+  if (customerHistoryCache) return;
+
+  if (restoreGlobalCache() && customerHistoryCache) return;
+
+  const globalLoading = getGlobalLoading("customerHistory");
+  if (globalLoading) {
+    await globalLoading;
+    restoreGlobalCache();
+    return;
+  }
+
+  if (customerHistoryLoadPromise) return customerHistoryLoadPromise;
+
+  customerHistoryLoadPromise = (async () => {
+    console.time("sheets-load-customer-history");
+    const rows = await readSheetRange(DATA_SHEET_TAB, "A:AU");
+
+    const headers =
+      rows && rows.length ? buildHeaderMap(rows[0]) : buildHeaderMap(DATA_SHEET_HEADERS);
+    const map = new Map();
+
+    for (const row of (rows || []).slice(1)) {
+      const name = getCellValue(row, headers, "Customer Name");
+      if (!name) continue;
+
+      const entry = {
+        quotationDate: getCellValue(row, headers, "Quotation Date"),
+        timestamp: getCellValue(row, headers, "Timestamp"),
+      };
+      for (const field of Object.keys(CUSTOMER_HISTORY_COLUMN_MAP)) {
+        entry[field] = getCellValue(row, headers, CUSTOMER_HISTORY_COLUMN_MAP[field]);
+      }
+
+      const key = name.trim().toLowerCase();
+      const existing = map.get(key);
+      if (!existing || isNewerCustomerHistoryEntry(entry, existing)) {
+        map.set(key, entry);
+      }
+    }
+
+    customerHistoryCache = map;
+    console.timeEnd("sheets-load-customer-history");
+    storeGlobalCache();
+  })();
+
+  setGlobalLoading("customerHistory", customerHistoryLoadPromise);
+
+  try {
+    await customerHistoryLoadPromise;
+  } finally {
+    customerHistoryLoadPromise = null;
+    setGlobalLoading("customerHistory", null);
+  }
+}
+
+function mergeCustomerHistory(customer) {
+  const merged = { ...customer };
+  if (!customerHistoryCache || customerHistoryCache.size === 0) return merged;
+
+  const key = (customer.customerName || "").trim().toLowerCase();
+  const history = customerHistoryCache.get(key);
+  if (!history) return merged;
+
+  for (const field of Object.keys(CUSTOMER_HISTORY_COLUMN_MAP)) {
+    const hasValue =
+      merged[field] !== undefined &&
+      merged[field] !== null &&
+      String(merged[field]).trim() !== "";
+    if (hasValue) continue;
+
+    const fallback = history[field];
+    if (fallback !== undefined && fallback !== null && String(fallback).trim() !== "") {
+      merged[field] = fallback;
+    }
+  }
+  return merged;
 }
 
 async function ensurePartsLoaded() {
@@ -338,6 +466,7 @@ export async function preloadAll() {
   await Promise.all([
     prewarmAuth(),
     ensureCustomersLoaded(),
+    ensureCustomerHistoryLoaded(),
     ensurePartsLoaded(),
     ensureDataHeadersLoaded(),
   ]);
@@ -360,20 +489,41 @@ export async function getAllCustomers() {
   return customersCache;
 }
 
+const MAX_CUSTOMER_SEARCH_RESULTS = 25;
+
 export async function searchCustomers(query) {
   if (!query || !query.trim()) return [];
   const q = query.trim().toLowerCase();
   await ensureCustomersLoaded();
+  await ensureCustomerHistoryLoaded();
 
   console.time("search-customers");
-  const results = customersCache.filter(
-    (c) =>
-      c.customerName.toLowerCase().includes(q) ||
-      c.gstNo.toLowerCase().includes(q)
-  );
+
+  const results = [];
+  for (const c of customersCache) {
+    const name = (c.customerName || "").toLowerCase();
+    const gst = (c.gstNo || "").toLowerCase();
+    if (!name.includes(q) && !gst.includes(q)) continue;
+    const key = name || gst;
+    results.push({
+      customer: c,
+      rank: key.startsWith(q) ? 0 : 1,
+      length: key.length,
+      sortKey: key,
+    });
+  }
+
+  results.sort((a, b) => {
+    if (a.rank !== b.rank) return a.rank - b.rank;
+    if (a.length !== b.length) return a.length - b.length;
+    return a.sortKey.localeCompare(b.sortKey);
+  });
+
   console.timeEnd("search-customers");
 
-  return results.slice(0, 10);
+  return results
+    .slice(0, MAX_CUSTOMER_SEARCH_RESULTS)
+    .map((r) => mergeCustomerHistory(r.customer));
 }
 
 export async function getCustomerByRowIndex(index) {
@@ -720,9 +870,6 @@ const DATA_SHEET_HEADERS = [
   "Revised Quotation Form",
 ];
 
-let dataHeadersCache = null;
-let dataHeadersLoadPromise = null;
-
 async function ensureDataHeadersLoaded() {
   if (dataHeadersCache) return;
 
@@ -790,10 +937,10 @@ export async function buildQuotationRows(quotation, { quotationId, createdAt }) 
       Timestamp: createdAt,
       "Customer Name": customer.customerName,
       "Full Address with GST": customer.fullAddressGst,
-      "Full Address": "",
-      "GST NO.#": "",
-      "State Name": "",
-      "State Code": "",
+      "Full Address": customer.fullAddress || "",
+      "GST NO.#": customer.gstNo || "",
+      "State Name": customer.stateName || "",
+      "State Code": customer.stateCode || "",
       "Contact Person": customer.contactPerson,
       "Contact Number": customer.contactNumber,
       Designation: customer.designation,
@@ -820,9 +967,12 @@ export async function buildQuotationRows(quotation, { quotationId, createdAt }) 
       Branch: "",
       "Part Number": item.partNumber,
       "Part Descriptions": item.partDescription,
-      "HSN Code": "",
-      UOM: "",
-      "GST Rate": "",
+      "HSN Code": item.hsnCode || "",
+      // Business rule: UOM is always "Nos" and GST Rate is always 18%.
+      // These are forced constants (never taken from the parts master or
+      // user input) so every saved quotation row carries the same values.
+      UOM: DEFAULT_UOM,
+      "GST Rate": String(DEFAULT_GST_RATE),
       Quantity: item.quantity,
       "Unit Price": item.unitPrice,
       "Other Rate": item.otherRate,
@@ -833,7 +983,7 @@ export async function buildQuotationRows(quotation, { quotationId, createdAt }) 
       Availability: item.availability,
       "Price (w.e.f)": item.priceWef,
       "Live Stock": item.liveStock,
-      "GST Amount": 0,
+      "GST Amount": computeGstAmount(item, DEFAULT_GST_RATE),
       Status: "Active",
       "Revised Quotation Form": "No",
     };
@@ -854,6 +1004,13 @@ export async function appendQuotation(quotation, meta) {
   await appendSheetRows(DATA_SHEET_TAB, rows);
   console.timeEnd("sheets-append-quotation");
 
+  // The DATA sheet now contains the new rows, so any previously loaded
+  // quotation list is stale. Invalidate the caches so the very next
+  // GET /api/quotations re-reads the sheet and the new quotation appears
+  // without a server restart. (Business data in customers/parts caches is
+  // unaffected by this write and must NOT be invalidated.)
+  invalidateQuotationsCache();
+
   return { rowsWritten: rows.length };
 }
 
@@ -862,6 +1019,25 @@ export async function appendQuotation(quotation, meta) {
 let quotationsCache = null;
 let quotationsDetailCache = null;
 let quotationsLoadPromise = null;
+
+// ─── QUOTATION CACHE INVALIDATION ─────────────────────────────────────────────
+// After a successful appendQuotation() the DATA sheet has changed, but the
+// in-memory quotation caches below would still serve the OLD list (stale rows).
+// Without invalidation, GET /api/quotations keeps returning the previous
+// snapshot until the server restarts. This function drops every quotation
+// cache (module-level AND the globalThis copy shared across route-handler
+// module instances) so the next GET /api/quotations reloads straight from the
+// DATA sheet. Only quotation-related caches are cleared; customer and parts
+// caches are intentionally left untouched.
+function invalidateQuotationsCache() {
+  quotationsCache = null;
+  quotationsDetailCache = null;
+  quotationsLoadPromise = null;
+  if (typeof globalThis !== "undefined" && globalThis.__sheetsCache) {
+    globalThis.__sheetsCache.quotations = undefined;
+    globalThis.__sheetsCache.quotationsDetail = undefined;
+  }
+}
 
 async function ensureQuotationsLoaded() {
   if (quotationsCache && quotationsDetailCache) return;
@@ -921,6 +1097,9 @@ async function ensureQuotationsLoaded() {
       detailMap.get(quotationNo).push({
         partNumber: getCellValue(row, headers, "Part Number"),
         description: getCellValue(row, headers, "Part Descriptions"),
+        hsnCode: getCellValue(row, headers, "HSN Code"),
+        uom: getCellValue(row, headers, "UOM") || DEFAULT_UOM,
+        gstRate: getCellValue(row, headers, "GST Rate") || String(DEFAULT_GST_RATE),
         quantity: getCellNum(row, headers, "Quantity"),
         unitPrice: getCellNum(row, headers, "Unit Price"),
         otherRate: getCellNum(row, headers, "Other Rate"),
@@ -937,6 +1116,10 @@ async function ensureQuotationsLoaded() {
         firstRow._customer = {
           customerName: getCellValue(row, headers, "Customer Name"),
           fullAddressGst: getCellValue(row, headers, "Full Address with GST"),
+          fullAddress: getCellValue(row, headers, "Full Address"),
+          gstNo: getCellValue(row, headers, "GST NO.#"),
+          stateName: getCellValue(row, headers, "State Name"),
+          stateCode: getCellValue(row, headers, "State Code"),
           contactPerson: getCellValue(row, headers, "Contact Person"),
           contactNumber: getCellValue(row, headers, "Contact Number"),
           designation: getCellValue(row, headers, "Designation"),
@@ -983,6 +1166,46 @@ async function ensureQuotationsLoaded() {
 export async function getQuotations() {
   await ensureQuotationsLoaded();
   return quotationsCache;
+}
+
+// Generate sequential quotation number in format: DEEP/M-SPR/25-26/Q000001
+export async function generateNextQuotationNumber() {
+  await ensureQuotationsLoaded();
+  
+  // Get current financial year (April to March)
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+  
+  let financialYear;
+  if (month >= 4) {
+    // April onwards: current year - next year
+    financialYear = `${String(year).slice(-2)}-${String(year + 1).slice(-2)}`;
+  } else {
+    // Jan-March: previous year - current year
+    financialYear = `${String(year - 1).slice(-2)}-${String(year).slice(-2)}`;
+  }
+  
+  // Find highest quotation number for current financial year
+  let maxNumber = 0;
+  const prefix = `DEEP/M-SPR/${financialYear}/Q`;
+  
+  for (const quotation of quotationsCache) {
+    const quotationNo = quotation.quotationNo;
+    if (quotationNo && quotationNo.startsWith(prefix)) {
+      const numberPart = quotationNo.replace(prefix, "");
+      const number = parseInt(numberPart, 10);
+      if (!isNaN(number) && number > maxNumber) {
+        maxNumber = number;
+      }
+    }
+  }
+  
+  // Generate next number with 6 digits
+  const nextNumber = maxNumber + 1;
+  const paddedNumber = String(nextNumber).padStart(6, '0');
+  
+  return `${prefix}${paddedNumber}`;
 }
 
 export async function getQuotationByNo(quotationNo) {

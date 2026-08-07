@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { validateQuotation } from "@/lib/validation/quotationSchema";
-import { appendQuotation, getQuotations } from "@/lib/services/googleSheetsService";
+import { appendQuotation, getQuotations, generateNextQuotationNumber } from "@/lib/services/googleSheetsService";
 
 // This route handles both listing and creating quotations.
 // The frontend always calls this endpoint; it never touches the sheet directly.
@@ -39,7 +39,7 @@ export async function POST(request) {
     );
   }
 
-  const quotationId = `QTN-${Date.now().toString(36).toUpperCase()}`;
+  const quotationId = await generateNextQuotationNumber();
   const createdAt = new Date().toISOString();
 
   try {

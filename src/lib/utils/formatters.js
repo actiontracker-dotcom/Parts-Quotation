@@ -1,8 +1,19 @@
 const INR_FORMATTER = new Intl.NumberFormat("en-IN", {
-  style: "currency",
-  currency: "INR",
   maximumFractionDigits: 2,
 });
+
+export function formatDate(dateString) {
+  if (!dateString) return "";
+  
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+  
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  
+  return `${day}/${month}/${year}`;
+}
 
 export function formatCurrency(value) {
   const number = Number(value);
@@ -24,6 +35,17 @@ export function computeLineTotal(item) {
   const base = quantity * (unitPrice + otherRate);
   const discountAmount = base * (discountPercent / 100);
   return Math.max(base - discountAmount, 0);
+}
+
+// GST Amount per item = (Taxable Amount × GST Rate) / 100.
+// Taxable amount for a line is its line total (after discount).
+// GST Rate defaults to the business rule (18%) when blank/missing so existing
+// quotations recalculate correctly.
+export function computeGstAmount(item, gstRateOverride) {
+  const rate = gstRateOverride !== undefined && gstRateOverride !== null
+    ? toNumber(gstRateOverride)
+    : toNumber(item.gstRate) || 18;
+  return Math.round((computeLineTotal(item) * rate) / 100 * 100) / 100;
 }
 
 export function computeQuotationTotals(items) {
