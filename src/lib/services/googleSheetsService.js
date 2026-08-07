@@ -1165,7 +1165,19 @@ export async function generateNextQuotationNumber() {
 
 export async function getQuotationByNo(quotationNo) {
   const { detailMap } = await loadQuotations();
-  const items = detailMap ? detailMap.get(quotationNo) : null;
+
+  // The dynamic route may deliver the quotation number percent-encoded (e.g.
+  // "DEEP%2FM-SPR%2F26-27%2FQ000001" on Vercel) while detailMap is keyed by the
+  // decoded sheet value. Decode defensively before lookup; if it is already
+  // decoded or malformed, fall back to the original value.
+  let normalizedQuotationNo = quotationNo;
+  try {
+    normalizedQuotationNo = decodeURIComponent(quotationNo);
+  } catch {
+    normalizedQuotationNo = quotationNo;
+  }
+
+  const items = detailMap ? detailMap.get(normalizedQuotationNo) : null;
   if (!items || items.length === 0) return null;
 
   const { _customer, _quotation } = items[0];
