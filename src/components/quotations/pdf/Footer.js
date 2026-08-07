@@ -4,7 +4,7 @@ import footerImage from "./Quotation footer.png";
 
 export default function Footer() {
   return (
-    <View style={styles.footer} fixed>
+    <View style={styles.footer}>
       <Image src={footerImage.src} style={styles.footerImage} />
     </View>
   );

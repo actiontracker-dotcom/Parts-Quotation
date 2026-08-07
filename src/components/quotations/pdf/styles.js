@@ -25,7 +25,7 @@ const hair = { borderWidth: 0.8, borderColor: BORDER };
 export const styles = StyleSheet.create({
   page: {
     paddingTop: 22,
-    paddingBottom: 18,
+    paddingBottom: 22,
     paddingHorizontal: 24,
     fontFamily: "Helvetica",
     fontSize: 8,
@@ -316,14 +316,11 @@ belowTableRow: {
 
   /* ---------- Footer ---------- */
   footer: {
-    position: "absolute",
-    bottom: 18,
-    left: 24,
-    right: 24,
     borderWidth: 0.8,
     borderColor: BORDER,
     paddingVertical: 4,
     paddingHorizontal: 5,
+    marginTop: 0,
   },
   footerImage: { width: "100%", objectFit: "contain" },
   footerLeft: { flexGrow: 1 },
