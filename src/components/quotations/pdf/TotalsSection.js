@@ -1,6 +1,6 @@
 import { View, Text } from "@react-pdf/renderer";
 import { styles } from "./styles";
-import { formatCurrency, toNumber } from "@/lib/utils/formatters";
+import { formatCurrency, computeLineTotal, toNumber } from "@/lib/utils/formatters";
 import { amountInWords } from "@/lib/utils/amountInWords";
 import { DEFAULT_GST_RATE } from "@/lib/constants/quotationOptions";
 
@@ -8,15 +8,8 @@ import { DEFAULT_GST_RATE } from "@/lib/constants/quotationOptions";
 // (material value after discount). Intra-state supplies (Chhattisgarh,
 // state code 22) split the tax into SGST + CGST; all other states use IGST.
 export default function TotalsSection({ items, customer }) {
-  const subtotal = items.reduce((sum, item) => sum + toNumber(item.quantity) * toNumber(item.unitPrice), 0);
-  const otherCharges = items.reduce((sum, item) => sum + toNumber(item.quantity) * toNumber(item.otherRate), 0);
-  const discountTotal = items.reduce((sum, item) => {
-    const base = toNumber(item.quantity) * (toNumber(item.unitPrice) + toNumber(item.otherRate));
-    return sum + base * (toNumber(item.discount) / 100);
-  }, 0);
-
-  const materialValue = subtotal + otherCharges;
-  const taxableValue = materialValue - discountTotal;
+  const materialValue = items.reduce((sum, item) => sum + computeLineTotal(item), 0);
+  const taxableValue = materialValue;
 
   const effectiveGstRate = items.length
     ? toNumber(items[0].gstRate || items[0].gst) || DEFAULT_GST_RATE
