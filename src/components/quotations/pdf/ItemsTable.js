@@ -17,10 +17,12 @@ export default function ItemsTable({ items }) {
     const gstRate = item.gstRate || item.gst || "-";
     const qty = Number(item.quantity) || 0;
     const unitPrice = Number(item.unitPrice) || 0;
+    const otherRate = Number(item.otherRate) || 0;
+    const effectiveRate = unitPrice + otherRate;
     const disc = item.discount ? `${Number(item.discount)}%` : "-";
     const amount = item.total ? Number(item.total) : computeLineTotal(item);
 
-    return { hsn, uom, gstRate, qty, unitPrice, disc, amount, item, i };
+    return { hsn, uom, gstRate, qty, effectiveRate, disc, amount, item, i };
   });
 
   const lastIdx = HEADERS.length - 1;
@@ -60,7 +62,7 @@ export default function ItemsTable({ items }) {
               <Text style={[styles.tableCellCenter, { width: "6%" }]}>{r.gstRate}</Text>
               <Text style={[styles.tableCellCenter, { width: "8%" }]}>{r.qty}</Text>
               <Text style={[styles.tableCellRight, { width: "10%" }]}>
-                {formatCurrency(r.unitPrice)}
+                {formatCurrency(r.effectiveRate)}
               </Text>
               <Text style={[styles.tableCellCenter, { width: "9%" }]}>{r.disc}</Text>
               <Text style={[styles.tableCellRight, styles.tableCellLast, { width: "12%" }]}>
