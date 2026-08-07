@@ -6,15 +6,23 @@ import { appendQuotation, getQuotations, generateNextQuotationNumber } from "@/l
 // This route handles both listing and creating quotations.
 // The frontend always calls this endpoint; it never touches the sheet directly.
 
+// Never statically optimize or cache this route. Every GET reads the Google
+// Sheet live (see loadQuotations in googleSheetsService), and every response
+// is explicitly marked no-store so no serverless instance, CDN, or browser
+// ever serves a stale quotation list.
+export const dynamic = "force-dynamic";
+
+const NO_STORE_HEADERS = { "Cache-Control": "no-store, max-age=0, must-revalidate" };
+
 export async function GET() {
   try {
     const quotations = await getQuotations();
-    return NextResponse.json({ success: true, data: quotations });
+    return NextResponse.json({ success: true, data: quotations }, { headers: NO_STORE_HEADERS });
   } catch (error) {
     console.error("[quotations/GET] Error:", error.message);
     return NextResponse.json(
       { success: false, message: "Failed to load quotations.", data: [] },
-      { status: 500 }
+      { status: 500, headers: NO_STORE_HEADERS }
     );
   }
 }

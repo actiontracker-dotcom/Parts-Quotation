@@ -1004,174 +1004,129 @@ export async function appendQuotation(quotation, meta) {
   await appendSheetRows(DATA_SHEET_TAB, rows);
   console.timeEnd("sheets-append-quotation");
 
-  // The DATA sheet now contains the new rows, so any previously loaded
-  // quotation list is stale. Invalidate the caches so the very next
-  // GET /api/quotations re-reads the sheet and the new quotation appears
-  // without a server restart. (Business data in customers/parts caches is
-  // unaffected by this write and must NOT be invalidated.)
-  invalidateQuotationsCache();
+  // No cache invalidation is needed: the quotation list is never cached in
+  // memory (see loadQuotations below), so the next read always reflects the
+  // sheet as it exists after this write.
 
   return { rowsWritten: rows.length };
 }
 
 // ─── QUOTATION LIST ─────────────────────────────────────────────────────────────
+// The quotation list is treated as a live view of the DATA sheet. We deliberately
+// do NOT keep a persistent in-memory snapshot of quotations.
+//
+// WHY: On Vercel each route handler runs as its own serverless instance and the
+// runtime keeps MULTIPLE warm instances alive at once. In-memory module variables
+// and even `globalThis` are per-process and are NOT shared between instances.
+// Therefore invalidating an in-memory cache after a POST only clears the cache on
+// the instance that handled the POST; any other warm GET instance keeps serving
+// its own stale snapshot. That is exactly the consistency bug the previous
+// cache-invalidation approach (commit d6579af) could not fix.
+//
+// FIX: Read quotations fresh from Google Sheets on every read and never serve a
+// snapshot. A GET on ANY instance therefore returns whatever is currently in the
+// sheet. TTL = 0; the only possible staleness is the (near-instant) propagation of
+// the sheet write itself. Cost is one range read (A:AU) per call — acceptable for
+// a small quotation sheet and required for correctness.
+async function loadQuotations() {
+  const rows = await readSheetRange(DATA_SHEET_TAB, "A:AU");
 
-let quotationsCache = null;
-let quotationsDetailCache = null;
-let quotationsLoadPromise = null;
-
-// ─── QUOTATION CACHE INVALIDATION ─────────────────────────────────────────────
-// After a successful appendQuotation() the DATA sheet has changed, but the
-// in-memory quotation caches below would still serve the OLD list (stale rows).
-// Without invalidation, GET /api/quotations keeps returning the previous
-// snapshot until the server restarts. This function drops every quotation
-// cache (module-level AND the globalThis copy shared across route-handler
-// module instances) so the next GET /api/quotations reloads straight from the
-// DATA sheet. Only quotation-related caches are cleared; customer and parts
-// caches are intentionally left untouched.
-function invalidateQuotationsCache() {
-  quotationsCache = null;
-  quotationsDetailCache = null;
-  quotationsLoadPromise = null;
-  if (typeof globalThis !== "undefined" && globalThis.__sheetsCache) {
-    globalThis.__sheetsCache.quotations = undefined;
-    globalThis.__sheetsCache.quotationsDetail = undefined;
-  }
-}
-
-async function ensureQuotationsLoaded() {
-  if (quotationsCache && quotationsDetailCache) return;
-
-  if (restoreGlobalCache()) {
-    if (typeof globalThis !== "undefined" && globalThis.__sheetsCache) {
-      if (globalThis.__sheetsCache.quotations && !quotationsCache) {
-        quotationsCache = globalThis.__sheetsCache.quotations;
-      }
-      if (globalThis.__sheetsCache.quotationsDetail && !quotationsDetailCache) {
-        quotationsDetailCache = globalThis.__sheetsCache.quotationsDetail;
-      }
-      if (quotationsCache && quotationsDetailCache) return;
-    }
+  if (!rows || rows.length < 2) {
+    return { quotations: [], detailMap: new Map() };
   }
 
-  if (quotationsLoadPromise) return quotationsLoadPromise;
+  const headers = buildHeaderMap(rows[0]);
+  const dataRows = rows.slice(1);
+  const groups = new Map();
+  const detailMap = new Map();
 
-  quotationsLoadPromise = (async () => {
-    console.time("sheets-load-quotations");
-    const rows = await readSheetRange(DATA_SHEET_TAB, "A:AU");
-    console.timeEnd("sheets-load-quotations");
+  for (const row of dataRows) {
+    const quotationNo = getCellValue(row, headers, "Quotation No");
+    if (!quotationNo) continue;
 
-    if (!rows || rows.length < 2) {
-      quotationsCache = [];
-      quotationsDetailCache = new Map();
-      return;
-    }
-
-    const headers = buildHeaderMap(rows[0]);
-    const dataRows = rows.slice(1);
-    const groups = new Map();
-    const detailMap = new Map();
-
-    for (const row of dataRows) {
-      const quotationNo = getCellValue(row, headers, "Quotation No");
-      if (!quotationNo) continue;
-
-      if (!groups.has(quotationNo)) {
-        groups.set(quotationNo, {
-          quotationNo,
-          customerName: getCellValue(row, headers, "Customer Name"),
-          quotationDate: getCellValue(row, headers, "Quotation Date"),
-          division: getCellValue(row, headers, "Division"),
-          engineer: getCellValue(row, headers, "Enquiry Generated by"),
-          status: getCellValue(row, headers, "Status"),
-          itemCount: 0,
-          totalAmount: 0,
-        });
-        detailMap.set(quotationNo, []);
-      }
-
-      const group = groups.get(quotationNo);
-      group.itemCount += 1;
-      group.totalAmount += getCellNum(row, headers, "Total Amount");
-
-      detailMap.get(quotationNo).push({
-        partNumber: getCellValue(row, headers, "Part Number"),
-        description: getCellValue(row, headers, "Part Descriptions"),
-        hsnCode: getCellValue(row, headers, "HSN Code"),
-        uom: getCellValue(row, headers, "UOM") || DEFAULT_UOM,
-        gstRate: getCellValue(row, headers, "GST Rate") || String(DEFAULT_GST_RATE),
-        quantity: getCellNum(row, headers, "Quantity"),
-        unitPrice: getCellNum(row, headers, "Unit Price"),
-        otherRate: getCellNum(row, headers, "Other Rate"),
-        discount: getCellNum(row, headers, "Disc."),
-        availability: getCellValue(row, headers, "Availability"),
-        liveStock: getCellValue(row, headers, "Live Stock"),
-        priceWef: getCellValue(row, headers, "Price (w.e.f)"),
-        total: getCellNum(row, headers, "Total Amount"),
+    if (!groups.has(quotationNo)) {
+      groups.set(quotationNo, {
+        quotationNo,
+        customerName: getCellValue(row, headers, "Customer Name"),
+        quotationDate: getCellValue(row, headers, "Quotation Date"),
+        division: getCellValue(row, headers, "Division"),
+        engineer: getCellValue(row, headers, "Enquiry Generated by"),
+        status: getCellValue(row, headers, "Status"),
+        itemCount: 0,
+        totalAmount: 0,
       });
-
-      // Store customer + quotation info from first row of each group
-      if (detailMap.get(quotationNo).length === 1) {
-        const firstRow = detailMap.get(quotationNo)[0];
-        firstRow._customer = {
-          customerName: getCellValue(row, headers, "Customer Name"),
-          fullAddressGst: getCellValue(row, headers, "Full Address with GST"),
-          fullAddress: getCellValue(row, headers, "Full Address"),
-          gstNo: getCellValue(row, headers, "GST NO.#"),
-          stateName: getCellValue(row, headers, "State Name"),
-          stateCode: getCellValue(row, headers, "State Code"),
-          contactPerson: getCellValue(row, headers, "Contact Person"),
-          contactNumber: getCellValue(row, headers, "Contact Number"),
-          designation: getCellValue(row, headers, "Designation"),
-          emailTo: getCellValue(row, headers, "Email Id To"),
-          emailCc: getCellValue(row, headers, "Email CC"),
-          location: getCellValue(row, headers, "Location"),
-          userId: getCellValue(row, headers, "User ID"),
-          engineerRemark: getCellValue(row, headers, "Engineer Remark"),
-        };
-        firstRow._quotation = {
-          quotationDate: getCellValue(row, headers, "Quotation Date"),
-          division: getCellValue(row, headers, "Division"),
-          sourceOfEnquiry: getCellValue(row, headers, "Source Of Enquiry"),
-          enquiryGeneratedBy: getCellValue(row, headers, "Enquiry Generated by"),
-          paymentTerms: getCellValue(row, headers, "Payment Terms"),
-          quotationValidity: getCellValue(row, headers, "Quotation Validity"),
-          termsOfDelivery: getCellValue(row, headers, "Terms Of Delivery"),
-          partyReferenceNumber: getCellValue(row, headers, "Partyref No."),
-          partyReferenceDate: getCellValue(row, headers, "Partyref Dt."),
-          quotationFollowUpBy: getCellValue(row, headers, "Quotation Followup by"),
-          status: getCellValue(row, headers, "Status"),
-        };
-      }
+      detailMap.set(quotationNo, []);
     }
 
-    quotationsCache = Array.from(groups.values());
-    quotationsCache.sort((a, b) => b.quotationNo.localeCompare(a.quotationNo));
-    quotationsDetailCache = detailMap;
+    const group = groups.get(quotationNo);
+    group.itemCount += 1;
+    group.totalAmount += getCellNum(row, headers, "Total Amount");
 
-    if (typeof globalThis !== "undefined") {
-      if (!globalThis.__sheetsCache) globalThis.__sheetsCache = {};
-      globalThis.__sheetsCache.quotations = quotationsCache;
-      globalThis.__sheetsCache.quotationsDetail = quotationsDetailCache;
+    detailMap.get(quotationNo).push({
+      partNumber: getCellValue(row, headers, "Part Number"),
+      description: getCellValue(row, headers, "Part Descriptions"),
+      hsnCode: getCellValue(row, headers, "HSN Code"),
+      uom: getCellValue(row, headers, "UOM") || DEFAULT_UOM,
+      gstRate: getCellValue(row, headers, "GST Rate") || String(DEFAULT_GST_RATE),
+      quantity: getCellNum(row, headers, "Quantity"),
+      unitPrice: getCellNum(row, headers, "Unit Price"),
+      otherRate: getCellNum(row, headers, "Other Rate"),
+      discount: getCellNum(row, headers, "Disc."),
+      availability: getCellValue(row, headers, "Availability"),
+      liveStock: getCellValue(row, headers, "Live Stock"),
+      priceWef: getCellValue(row, headers, "Price (w.e.f)"),
+      total: getCellNum(row, headers, "Total Amount"),
+    });
+
+    // Store customer + quotation info from first row of each group
+    if (detailMap.get(quotationNo).length === 1) {
+      const firstRow = detailMap.get(quotationNo)[0];
+      firstRow._customer = {
+        customerName: getCellValue(row, headers, "Customer Name"),
+        fullAddressGst: getCellValue(row, headers, "Full Address with GST"),
+        fullAddress: getCellValue(row, headers, "Full Address"),
+        gstNo: getCellValue(row, headers, "GST NO.#"),
+        stateName: getCellValue(row, headers, "State Name"),
+        stateCode: getCellValue(row, headers, "State Code"),
+        contactPerson: getCellValue(row, headers, "Contact Person"),
+        contactNumber: getCellValue(row, headers, "Contact Number"),
+        designation: getCellValue(row, headers, "Designation"),
+        emailTo: getCellValue(row, headers, "Email Id To"),
+        emailCc: getCellValue(row, headers, "Email CC"),
+        location: getCellValue(row, headers, "Location"),
+        userId: getCellValue(row, headers, "User ID"),
+        engineerRemark: getCellValue(row, headers, "Engineer Remark"),
+      };
+      firstRow._quotation = {
+        quotationDate: getCellValue(row, headers, "Quotation Date"),
+        division: getCellValue(row, headers, "Division"),
+        sourceOfEnquiry: getCellValue(row, headers, "Source Of Enquiry"),
+        enquiryGeneratedBy: getCellValue(row, headers, "Enquiry Generated by"),
+        paymentTerms: getCellValue(row, headers, "Payment Terms"),
+        quotationValidity: getCellValue(row, headers, "Quotation Validity"),
+        termsOfDelivery: getCellValue(row, headers, "Terms Of Delivery"),
+        partyReferenceNumber: getCellValue(row, headers, "Partyref No."),
+        partyReferenceDate: getCellValue(row, headers, "Partyref Dt."),
+        quotationFollowUpBy: getCellValue(row, headers, "Quotation Followup by"),
+        status: getCellValue(row, headers, "Status"),
+      };
     }
-  })();
-
-  try {
-    await quotationsLoadPromise;
-  } finally {
-    quotationsLoadPromise = null;
   }
+
+  const quotations = Array.from(groups.values());
+  quotations.sort((a, b) => b.quotationNo.localeCompare(a.quotationNo));
+  return { quotations, detailMap };
 }
 
 export async function getQuotations() {
-  await ensureQuotationsLoaded();
-  return quotationsCache;
+  const { quotations } = await loadQuotations();
+  return quotations;
 }
 
 // Generate sequential quotation number in format: DEEP/M-SPR/25-26/Q000001
 export async function generateNextQuotationNumber() {
-  await ensureQuotationsLoaded();
-  
+  const { quotations } = await loadQuotations();
+
   // Get current financial year (April to March)
   const now = new Date();
   const year = now.getFullYear();
@@ -1190,7 +1145,7 @@ export async function generateNextQuotationNumber() {
   let maxNumber = 0;
   const prefix = `DEEP/M-SPR/${financialYear}/Q`;
   
-  for (const quotation of quotationsCache) {
+  for (const quotation of quotations) {
     const quotationNo = quotation.quotationNo;
     if (quotationNo && quotationNo.startsWith(prefix)) {
       const numberPart = quotationNo.replace(prefix, "");
@@ -1209,8 +1164,8 @@ export async function generateNextQuotationNumber() {
 }
 
 export async function getQuotationByNo(quotationNo) {
-  await ensureQuotationsLoaded();
-  const items = quotationsDetailCache ? quotationsDetailCache.get(quotationNo) : null;
+  const { detailMap } = await loadQuotations();
+  const items = detailMap ? detailMap.get(quotationNo) : null;
   if (!items || items.length === 0) return null;
 
   const { _customer, _quotation } = items[0];
