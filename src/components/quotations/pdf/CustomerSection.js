@@ -92,11 +92,21 @@ export default function CustomerSection({
                     </View>
                   </View>
               ) : (
-                <>
-                  <Text style={styles.infoLabel}>{row.left.label}</Text>
-                  <Text style={styles.infoSep}>{row.left.sep}</Text>
-                  <Text style={styles.infoValue}>{row.left.value || ""}</Text>
-                </>
+                row.left.label === "Address" ? (
+                  <View style={{ flexDirection: "row", flex: 1, alignItems: "flex-start" }}>
+                    <Text style={styles.infoLabel}>{row.left.label}</Text>
+                    <Text style={styles.infoSep}>{row.left.sep}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.infoValue}>{row.left.value || ""}</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <>
+                    <Text style={styles.infoLabel}>{row.left.label}</Text>
+                    <Text style={styles.infoSep}>{row.left.sep}</Text>
+                    <Text style={styles.infoValue}>{row.left.value || ""}</Text>
+                  </>
+                )
               )
             ) : (
               <Text style={styles.infoValue}> </Text>

@@ -83,6 +83,8 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingTop: 4,
     paddingBottom: 5,
+    borderRightWidth: 0.8,
+    borderRightColor: BORDER,
   },
   infoCellRight: {
     width: "38%",
@@ -95,6 +97,7 @@ export const styles = StyleSheet.create({
   infoLabel: { fontFamily: "Helvetica-Bold", fontSize: 9.5 },
   infoSep: { fontSize: 9.5, marginHorizontal: 2 },
   infoValue: { fontSize: 8, flexShrink: 1 },
+  addressValue: { fontSize: 8, flexShrink: 1, maxWidth: "85%" },
 
   infoFullRow: {
     borderTopWidth: 0.8,
