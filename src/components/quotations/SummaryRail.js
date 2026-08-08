@@ -30,7 +30,7 @@ export default function SummaryRail({ totals, submitting, onSubmit, customer, qu
   }, [totals.grandTotal]);
 
   return (
-    <div className="lg:sticky lg:top-24">
+    <div className="lg:sticky lg:top-24 lg:self-start">
       <div className="overflow-hidden rounded-xl2 border border-ink-100 bg-white shadow-rail">
         <div className="relative bg-ink-900 px-6 py-5">
           <div

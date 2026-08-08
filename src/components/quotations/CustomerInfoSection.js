@@ -6,7 +6,6 @@ import { CardHeader, CardBody } from "@/components/ui/Card";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
 import Input from "@/components/ui/Input";
 import SearchableDropdown from "@/components/ui/SearchableDropdown";
-import Select from "@/components/ui/Select";
 import Textarea from "@/components/ui/Textarea";
 import Button from "@/components/ui/Button";
 import { DESIGNATIONS } from "@/constants/masterData";
@@ -15,7 +14,6 @@ export default function CustomerInfoSection({
   values,
   errors,
   onChange,
-  locations,
   onAddCustomer,
 }) {
   const searchCustomers = useCallback(async (query, { signal } = {}) => {
@@ -111,7 +109,6 @@ export default function CustomerInfoSection({
         />
         <Input
           label="Email ID To"
-          required
           type="email"
           placeholder="buyer@company.com"
           value={values.emailTo}
@@ -126,10 +123,9 @@ export default function CustomerInfoSection({
           error={errors["customer.emailCc"]}
           onChange={(e) => onChange("emailCc", e.target.value)}
         />
-        <Select
+        <Input
           label="Location"
-          placeholder="Select location"
-          options={locations}
+          placeholder="Enter location"
           value={values.location}
           error={errors["customer.location"]}
           onChange={(e) => onChange("location", e.target.value)}

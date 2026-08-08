@@ -69,7 +69,6 @@ export default function QuotationForm({ mode = "create", quotationNo = null }) {
     paymentTerms,
     deliveryTerms,
     enquirySources,
-    locations,
     engineers,
     error: masterError,
   } = useMasterData();
@@ -159,9 +158,8 @@ export default function QuotationForm({ mode = "create", quotationNo = null }) {
               values={customer}
               errors={errors}
               onChange={updateCustomerField}
-              locations={locations}
-              onAddCustomer={handleAddCustomer}
-            />
+onAddCustomer={handleAddCustomer}
+          />
           </Card>
           <Card>
             <QuotationInfoSection

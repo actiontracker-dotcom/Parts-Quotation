@@ -12,6 +12,10 @@ import {
   REVISE_NUMBERS,
 } from "@/constants/masterData";
 
+const FOLLOWUP_BY_EXCLUDING_DHEERENDRA_SEN = FOLLOWUP_BY.filter(
+  (item) => !/dheerendra\s+sen/i.test(`${item.value} ${item.label}`)
+);
+
 export default function QuotationInfoSection({
   values,
   errors,
@@ -106,18 +110,10 @@ export default function QuotationInfoSection({
         <SearchableDropdown
           label="Quotation Follow-up By"
           placeholder="Select follow-up person"
-          items={FOLLOWUP_BY}
+          items={FOLLOWUP_BY_EXCLUDING_DHEERENDRA_SEN}
           value={values.quotationFollowUpBy}
           error={errors["quotation.quotationFollowUpBy"]}
           onChange={(val) => onChange("quotationFollowUpBy", val)}
-        />
-        <SearchableDropdown
-          label="Revise Number"
-          placeholder="Select revision"
-          items={REVISE_NUMBERS}
-          value={values.reviseNumber}
-          error={errors["quotation.reviseNumber"]}
-          onChange={(val) => onChange("reviseNumber", val)}
         />
       </CardBody>
     </>

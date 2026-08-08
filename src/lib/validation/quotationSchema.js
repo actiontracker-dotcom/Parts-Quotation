@@ -18,7 +18,14 @@ export const customerInfoSchema = z.object({
     .min(1, "Contact number is required")
     .regex(/^[0-9+\-\s()]{7,20}$/, "Enter a valid contact number"),
   designation: z.string().trim().optional().default(""),
-  emailTo: z.string().trim().min(1, "Email (To) is required").email("Enter a valid email address"),
+  emailTo: z
+    .string()
+    .trim()
+    .optional()
+    .default("")
+    .refine((val) => val === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val), {
+      message: "Enter a valid email address",
+    }),
   emailCc: z
     .string()
     .trim()

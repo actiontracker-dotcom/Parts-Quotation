@@ -21,6 +21,7 @@ export default function SearchableDropdown({
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const wrapperRef = useRef(null);
   const inputRef = useRef(null);
+  const openedByFocusRef = useRef(false);
 
   const selectedLabel = useMemo(() => {
     if (!value) return "";
@@ -34,6 +35,10 @@ export default function SearchableDropdown({
 
   useEffect(() => {
     if (open) setHighlightIndex(-1);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) openedByFocusRef.current = false;
   }, [open]);
 
   useEffect(() => {
@@ -65,6 +70,10 @@ export default function SearchableDropdown({
   }
 
   function handleInputClick() {
+    if (openedByFocusRef.current) {
+      openedByFocusRef.current = false;
+      return;
+    }
     setOpen((prev) => !prev);
   }
 
@@ -153,7 +162,10 @@ export default function SearchableDropdown({
             onClick={handleInputClick}
             onKeyDown={handleKeyDown}
             onFocus={() => {
-              if (filtered.length > 0 && !open) setOpen(true);
+              if (filtered.length > 0 && !open) {
+                openedByFocusRef.current = true;
+                setOpen(true);
+              }
             }}
           />
           {loading ? (
