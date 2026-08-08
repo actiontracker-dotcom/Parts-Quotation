@@ -5,6 +5,7 @@ import { DEFAULT_UOM, DEFAULT_GST_RATE } from "../constants/quotationOptions.js"
 const CUSTOMER_SHEET_TAB = "Mastersheet";
 const PARTS_SHEET_TAB = "Products";
 const DATA_SHEET_TAB = "Data";
+const FOLLOWUP_FORM_SHEET_TAB = "Followup Form for Quotation";
 
 // ─── LOW-LEVEL SHEET I/O ───────────────────────────────────────────────────────
 // Implemented in googleSheetsClient.js — imported above.
@@ -1330,6 +1331,26 @@ async function loadQuotations() {
         quotationFollowUpBy: getCellValue(row, headers, "Quotation Followup by"),
         status: getCellValue(row, headers, "Status"),
       };
+      firstRow._followup = {
+        plannedOrderFollowUp: getCellValue(row, headers, "Planned Order Follow-up"),
+        numberOfFollowup: getCellValue(row, headers, "Number of Followup"),
+        orderFollowUpSummary: getCellValue(row, headers, "Order Follow-up Summary"),
+        nextFollowupDate: getCellValue(row, headers, "Next Followup date"),
+        nextFollowupStatus: getCellValue(row, headers, "Next followup Status"),
+        weekWiseStatus: getCellValue(row, headers, "Week Wise Status"),
+        orderStatus: getCellValue(row, headers, "Order Status"),
+        orderReceivedDate: getCellValue(row, headers, "Order received Date"),
+        orderPDFFile: getCellValue(row, headers, "Order PDF File"),
+        remarkForOrderReceived: getCellValue(row, headers, "Remark for Order Received"),
+        sendTriggerForOrderVerification: getCellValue(row, headers, "Send trigger for Order verification"),
+        quotationFollowupLink: getCellValue(row, headers, "Quotation Followup Link"),
+        htmlForNextFollowup: getCellValue(row, headers, "HTML for Next followup"),
+        actualFollowupOrder: getCellValue(row, headers, "Actual Followup order"),
+        orderNumber: getCellValue(row, headers, "Order Number"),
+        orderDate: getCellValue(row, headers, "Order Date"),
+        orderVerificationStatus: getCellValue(row, headers, "Order Verification Status"),
+        attachedPaymentReceipt: getCellValue(row, headers, "Attached Payment Receipt"),
+      };
     }
   }
 
@@ -1400,7 +1421,7 @@ export async function getQuotationByNo(quotationNo) {
   const items = detailMap ? detailMap.get(normalizedQuotationNo) : null;
   if (!items || items.length === 0) return null;
 
-  const { _customer, _quotation } = items[0];
+  const { _customer, _quotation, _followup } = items[0];
   const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
   const grandTotal = items.reduce((sum, item) => sum + item.total, 0);
 
@@ -1408,11 +1429,367 @@ export async function getQuotationByNo(quotationNo) {
     quotationNo,
     customer: _customer || {},
     quotation: _quotation || {},
-    items: items.map(({ _customer, _quotation, ...rest }) => rest),
+    followup: _followup || {},
+    items: items.map(({ _customer, _quotation, _followup, ...rest }) => rest),
     totals: {
       itemCount: items.length,
       subtotal,
       grandTotal,
     },
   };
+}
+
+// ─── QUOTATION FOLLOW-UP HISTORY (Followup Form for Quotation) ─────────────────
+// This sheet is a pure HISTORY/LOG. Every follow-up or order-status submission
+// appends ONE new row below the previous ones. Old rows are NEVER rewritten,
+// cleared, or deleted. None of the shared three working sheets are touched.
+//
+// Column positions come from the LIVE header row, so future column additions or
+// reorders never shift the values the app writes. The app only writes the
+// columns it owns; blank fields stay blank and any separately maintained column
+// is left completely alone.
+
+const FOLLOWUP_FORM_HEADERS = [
+  "Timestamp",
+  "Quotation No",
+  "Submission Type",
+  "Next Followup Date",
+  "Followup Status",
+  "Followup Remark",
+  "Order Status",
+  "Attach Order PDF",
+  "Order Received date",
+  "Remark for Order",
+  "Order Number",
+  "Order Date",
+  "Order Verification Status",
+  "Attached Payment Receipt",
+  "Due Days",
+  "Prefilled Form",
+  "Prefilled Form URL",
+];
+
+// The columns the app itself may write. Kept separate so future additions to
+// FOLLOWUP_FORM_HEADERS (used purely as a read fallback) never widen writes.
+const FOLLOWUP_FORM_WRITE_HEADERS = FOLLOWUP_FORM_HEADERS.slice();
+
+async function readFollowupFormHeaders() {
+  // Read only the live header row ("A1:1" = every column of row 1). The map is
+  // built from the ACTUAL sheet, never a hardcoded column count or such "A:Q".
+  const rows = await readSheetRange(FOLLOWUP_FORM_SHEET_TAB, "A1:1");
+  if (rows && rows.length > 0 && rows[0] && rows[0].some((v) => v !== undefined && v !== null && v !== "")) {
+    return buildHeaderMap(rows[0]);
+  }
+  return buildHeaderMap(FOLLOWUP_FORM_HEADERS);
+}
+
+function followupRowWidth(headers) {
+  let lastIndex = 0;
+  for (const header of FOLLOWUP_FORM_WRITE_HEADERS) {
+    const idx = headers[header];
+    if (idx !== undefined && idx + 1 > lastIndex) {
+      lastIndex = idx + 1;
+    }
+  }
+  return lastIndex;
+}
+
+/**
+ * Builds a single history row (values placed by header name) for the follow-up
+ * log sheet. Fields not provided (or not owned by the app) remain blank.
+ */
+export async function buildFollowupFormRow(data) {
+  let headers;
+  try {
+    headers = await readFollowupFormHeaders();
+  } catch {
+    headers = buildHeaderMap(FOLLOWUP_FORM_HEADERS);
+  }
+  const width = followupRowWidth(headers);
+  const row = new Array(width).fill("");
+
+  const fieldMap = {
+    Timestamp: data.timestamp,
+    "Quotation No": data.quotationNo,
+    "Submission Type": data.submissionType,
+    "Next Followup Date": data.nextFollowupDate,
+    "Followup Status": data.followupStatus,
+    "Followup Remark": data.followupRemark,
+    "Order Status": data.orderStatus,
+    "Attach Order PDF": data.attachOrderPDF,
+    "Order Received date": data.orderReceivedDate,
+    "Remark for Order": data.remarkForOrder,
+    "Order Number": data.orderNumber,
+    "Order Date": data.orderDate,
+    "Order Verification Status": data.orderVerificationStatus,
+    "Attached Payment Receipt": data.attachedPaymentReceipt,
+    "Due Days": data.dueDays,
+    "Prefilled Form": data.prefilledForm,
+    "Prefilled Form URL": data.prefilledFormUrl,
+  };
+
+  for (const [header, value] of Object.entries(fieldMap)) {
+    const idx = headers[header];
+    if (
+      idx !== undefined &&
+      idx < width &&
+      value !== undefined &&
+      value !== null &&
+      String(value).trim() !== ""
+    ) {
+      row[idx] = String(value);
+    }
+  }
+
+  return row;
+}
+
+/**
+ * Appends ONE new history row to "Followup Form for Quotation".
+ *
+ * - Timestamp defaults to now (ISO) unless the caller supplies one.
+ * - The row is written by header name and only into columns the app owns.
+ * - Existing history rows are never touched, cleared or overwritten.
+ *
+ * Returns `{ rowsWritten, quotationNo, submissionType }`.
+ */
+export async function appendQuotationFollowupRecord(data) {
+  const timestamp = data.timestamp || new Date().toISOString();
+  const row = await buildFollowupFormRow({ ...data, timestamp });
+
+  await appendSheetRows(FOLLOWUP_FORM_SHEET_TAB, [row]);
+
+  return {
+    rowsWritten: 1,
+    quotationNo: data.quotationNo || "",
+    submissionType: data.submissionType || "",
+  };
+}
+
+function followupTimestampValue(value) {
+  const parsed = Number(value);
+  if (Number.isFinite(parsed)) return parsed;
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function followupTimestampKey(record) {
+  const timestamp = record.Timestamp || record.timestamp || "";
+  return timestamp ? followupTimestampValue(timestamp) : 0;
+}
+
+/**
+ * Shared reader for "Followup Form for Quotation".
+ *
+ * - Reads the live used range (never hardcodes columns or "A:Q"), then maps
+ *   every header by name from the ACTUAL sheet so new columns are picked up
+ *   automatically and unknown additions remain available on each record.
+ * - Completely empty data rows are skipped.
+ * - Records are sorted newest-first (by Timestamp; sheet row order is the
+ *   tiebreaker for equal/unparseable timestamps).
+ * - READ-ONLY: never updates, clears, or appends anything.
+ *
+ * Returns `[{ Timestamp, "Quotation No", "Submission Type", ...all columns }]`.
+ */
+async function readFollowupFormRecords() {
+  const rows = await readSheetRange(FOLLOWUP_FORM_SHEET_TAB, null);
+
+  if (!rows || rows.length < 2) return [];
+
+  const headers = buildHeaderMap(rows[0]);
+  const headerNames = Object.keys(headers);
+  const records = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const record = {};
+    let hasAnyValue = false;
+    for (const name of headerNames) {
+      const value = getCellValue(rows[i], headers, name);
+      record[name] = value;
+      if (value !== "") hasAnyValue = true;
+    }
+    if (!hasAnyValue) continue;
+    record.__sheetRow = i + 1;
+    records.push(record);
+  }
+
+  records.sort((a, b) => {
+    const ta = followupTimestampKey(a);
+    const tb = followupTimestampKey(b);
+    if (ta !== tb) return ta > tb ? -1 : 1;
+    return (a.__sheetRow || 0) - (b.__sheetRow || 0);
+  });
+
+  return records;
+}
+
+/**
+ * Returns the COMPLETE follow-up / order-status history for one quotation from
+ * "Followup Form for Quotation". Newest first.
+ */
+export async function getQuotationFollowupHistory(quotationNo) {
+  const records = await readFollowupFormRecords();
+  return records.filter((record) => record["Quotation No"] === quotationNo);
+}
+
+/**
+ * Returns ALL follow-up / order-status history from "Followup Form for
+ * Quotation", newest first. Used by the Follow-ups page.
+ *
+ * - Only the history sheet is read — the large Data sheet is never loaded
+ *   here. Quotation-level current state stays in the Data sheet and is fetched
+ *   separately only when the caller needs it.
+ * - READ-ONLY: never modifies the history sheet.
+ */
+export async function getAllFollowupRecords() {
+  return readFollowupFormRecords();
+}
+
+// ─── QUOTATION FOLLOW-UP UPDATE (DATA SHEET) ────────────────────────────────────
+// Updates ONLY the follow-up fields of an existing DATA-sheet quotation.
+//
+// Data-preservation rules (critical — the DATA sheet is shared with other
+// systems):
+// - The live sheet rows are read once and every row whose "Quotation No"
+//   matches the target is located by header name.
+// - Each existing row is cloned in full (every cell, including "Record #",
+//   Status, revised/reminder/invoice/order columns the app does not own).
+// - Only the supplied header-based fields are overlaid on the clone.
+// - The complete preserved row is written back, so no column is ever cleared,
+//   truncated, or replaced by a short generated array.
+// Column positions always come from the live header map, so future column
+// additions/reorders never break the write.
+async function updateQuotationDataFieldsByNo(quotationNo, buildFieldValues) {
+  const rows = await readSheetRange(DATA_SHEET_TAB, null);
+
+  if (!rows || rows.length < 2) return { success: false, reason: "empty" };
+
+  const headers = buildHeaderMap(rows[0]);
+
+  const targetRowIndices = [];
+  for (let i = 1; i < rows.length; i++) {
+    if (getCellValue(rows[i], headers, "Quotation No") === quotationNo) {
+      targetRowIndices.push(i);
+    }
+  }
+
+  if (targetRowIndices.length === 0) {
+    return { success: false, reason: "not-found" };
+  }
+
+  const fieldValues = buildFieldValues(rows, headers, targetRowIndices);
+
+  // Use the widest row in the range so we never truncate any preserved column.
+  const numCols = rows.reduce((max, r) => Math.max(max, r.length), 0);
+  const lastCol = getColumnLetter(numCols - 1);
+
+  for (const i of targetRowIndices) {
+    const merged = (rows[i] || []).slice(0, numCols);
+    for (let c = merged.length; c < numCols; c++) merged.push("");
+
+    for (const [header, value] of Object.entries(fieldValues)) {
+      const idx = headers[header];
+      if (idx !== undefined && idx < numCols && value !== undefined && value !== null) {
+        merged[idx] = String(value);
+      }
+    }
+
+    await updateSheetRow(DATA_SHEET_TAB, `A${i + 1}:${lastCol}${i + 1}`, [merged]);
+  }
+
+  return { success: true, quotationNo, rowsUpdated: targetRowIndices.length };
+}
+
+/**
+ * Records a "Next Follow-up" submission.
+ *
+ * 1. Updates the Data-sheet quotation (by "Quotation No"):
+ *    - "Next Followup date"  <- submitted date
+ *    - "Order Follow-up Summary" <- submitted remark
+ *    - "Next followup Status" <- submitted status
+ *    - "Number of Followup"  <- previous value + 1 (0 when empty/non-numeric)
+ * 2. Appends ONE history row to "Followup Form for Quotation"
+ *    (Submission Type = "Next Follow-up").
+ *
+ * Success is reported only when BOTH writes succeed. If either fails the
+ * caller receives success:false and no success message is sent to the user.
+ */
+export async function updateQuotationNextFollowup(quotationNo, data) {
+  const timestamp = new Date().toISOString();
+
+  const dataResult = await updateQuotationDataFieldsByNo(quotationNo, (rows, headers, idxs) => {
+    const currentCount = getCellNum(rows[idxs[0]], headers, "Number of Followup");
+    return {
+      "Next Followup date": data.nextFollowupDate || "",
+      "Order Follow-up Summary": data.followupRemark || "",
+      "Next followup Status": data.followupStatus || "",
+      "Number of Followup": String(currentCount + 1),
+    };
+  });
+
+  if (!dataResult.success) return dataResult;
+
+  try {
+    const history = await appendQuotationFollowupRecord({
+      timestamp,
+      quotationNo,
+      submissionType: "Next Follow-up",
+      nextFollowupDate: data.nextFollowupDate || "",
+      followupStatus: data.followupStatus || "",
+      followupRemark: data.followupRemark || "",
+    });
+    return { success: true, data: dataResult, history };
+  } catch (error) {
+    console.error(
+      "[updateQuotationNextFollowup] Data updated but history append failed:",
+      error
+    );
+    return { success: false, reason: "history-failed" };
+  }
+}
+
+/**
+ * Records an "Order Status" submission.
+ *
+ * 1. Updates the Data-sheet quotation (by "Quotation No"):
+ *    - "Order Status"             <- selected status
+ *    - "Order Number"             <- submitted order number
+ *    - "Order received Date"      <- submitted order received date
+ *    - "Remark for Order Received" <- submitted remark
+ * 2. Appends ONE history row to "Followup Form for Quotation"
+ *    (Submission Type = "Order Status").
+ *
+ * Number of Followup is intentionally NOT changed by this action.
+ * Unrelated columns are never touched.
+ */
+export async function updateQuotationOrderStatus(quotationNo, data) {
+  const timestamp = new Date().toISOString();
+
+  const dataResult = await updateQuotationDataFieldsByNo(quotationNo, () => ({
+    "Order Status": data.orderStatus || "",
+    "Order Number": data.orderNumber || "",
+    "Order received Date": data.orderReceivedDate || "",
+    "Remark for Order Received": data.remarkForOrder || "",
+  }));
+
+  if (!dataResult.success) return dataResult;
+
+  try {
+    const history = await appendQuotationFollowupRecord({
+      timestamp,
+      quotationNo,
+      submissionType: "Order Status",
+      orderStatus: data.orderStatus || "",
+      orderNumber: data.orderNumber || "",
+      orderReceivedDate: data.orderReceivedDate || "",
+      remarkForOrder: data.remarkForOrder || "",
+    });
+    return { success: true, data: dataResult, history };
+  } catch (error) {
+    console.error(
+      "[updateQuotationOrderStatus] Data updated but history append failed:",
+      error
+    );
+    return { success: false, reason: "history-failed" };
+  }
 }

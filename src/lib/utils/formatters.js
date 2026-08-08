@@ -15,6 +15,24 @@ export function formatDate(dateString) {
   return `${day}/${month}/${year}`;
 }
 
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Renders a timestamp as "08 Aug 2026, 10:10 AM". Falls back to the raw value
+// when the input is not a parseable date.
+export function formatDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return String(value);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = MONTH_SHORT[date.getMonth()];
+  const year = date.getFullYear();
+  let hours = date.getHours();
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${day} ${month} ${year}, ${hours}:${minutes} ${ampm}`;
+}
+
 export function formatCurrency(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return INR_FORMATTER.format(0);

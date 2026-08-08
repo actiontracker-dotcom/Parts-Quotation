@@ -3,12 +3,13 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FileText, Plus, Search, Pencil, Calendar, X } from "lucide-react";
+import { FileText, Plus, Search, Pencil, Calendar } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatCurrency } from "@/lib/utils/formatters";
 import QuotationDetailsModal from "@/components/quotations/QuotationDetailsModal";
+import QuotationFollowupModal from "@/components/quotations/QuotationFollowupModal";
 
 export default function QuotationsPage() {
   const [quotations, setQuotations] = useState([]);
@@ -20,38 +21,34 @@ export default function QuotationsPage() {
 
   const router = useRouter();
 
+  const loadQuotations = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/quotations");
+      const json = await res.json();
+      if (json.success) {
+        setQuotations(json.data);
+      } else {
+        setError(json.message || "Failed to load quotations.");
+      }
+    } catch (err) {
+      setError(err.message || "Network error.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadQuotations();
+  }, [loadQuotations]);
+
   const openQuotationForEdit = useCallback(
     (quotationNo) => {
       router.push(`/quotations/${encodeURIComponent(quotationNo)}/edit`);
     },
     [router]
   );
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    fetch("/api/quotations")
-      .then((res) => res.json())
-      .then((json) => {
-        if (cancelled) return;
-        if (json.success) {
-          setQuotations(json.data);
-        } else {
-          setError(json.message || "Failed to load quotations.");
-        }
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setError(err.message || "Network error.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => { cancelled = true; };
-  }, []);
 
   const filteredQuotations = useMemo(() => {
     if (!searchQuery.trim()) return quotations;
@@ -249,34 +246,11 @@ export default function QuotationsPage() {
       )}
 
       {followUpQuotationNo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="fixed inset-0 bg-ink-950/40 cursor-pointer"
-            onClick={() => setFollowUpQuotationNo(null)}
-          />
-          <div className="relative w-full max-w-md bg-white rounded-xl shadow-xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-ink-900">Next Follow-up</h2>
-              <button
-                onClick={() => setFollowUpQuotationNo(null)}
-                className="rounded-md p-1.5 text-ink-300 hover:text-ink-600 hover:bg-ink-50 transition-colors cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <p className="text-sm text-ink-600 mb-4">
-              Quotation: {followUpQuotationNo}
-            </p>
-            <p className="text-sm text-ink-400 italic">
-              Follow-up details will be added here.
-            </p>
-            <div className="mt-6 flex justify-end">
-              <Button onClick={() => setFollowUpQuotationNo(null)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
+        <QuotationFollowupModal
+          quotationNo={followUpQuotationNo}
+          onClose={() => setFollowUpQuotationNo(null)}
+          onDataChanged={loadQuotations}
+        />
       )}
 
       </AppShell>

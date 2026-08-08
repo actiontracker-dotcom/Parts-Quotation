@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
-import { FileText, X } from "lucide-react";
+import { FileText, History, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 const NAV_ITEMS = [
   { label: "Quotations", href: "/quotations", icon: FileText },
+  { label: "Follow-ups", href: "/followups", icon: History },
 ];
 
 export default function Sidebar({ open, onClose }) {
