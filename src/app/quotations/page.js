@@ -3,17 +3,20 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FileText, Plus, Search } from "lucide-react";
+import { FileText, Plus, Search, Pencil, Calendar, X } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatCurrency } from "@/lib/utils/formatters";
+import QuotationDetailsModal from "@/components/quotations/QuotationDetailsModal";
 
 export default function QuotationsPage() {
   const [quotations, setQuotations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewQuotationNo, setViewQuotationNo] = useState(null);
+  const [followUpQuotationNo, setFollowUpQuotationNo] = useState(null);
 
   const router = useRouter();
 
@@ -175,11 +178,16 @@ export default function QuotationsPage() {
                   {displayQuotations.map((q, i) => (
                     <tr
                       key={q.quotationNo}
-                      onClick={() => openQuotationForEdit(q.quotationNo)}
-                      className="border-b border-ink-50 transition-colors hover:bg-ink-50/50 cursor-pointer"
+                      className="border-b border-ink-50 transition-colors hover:bg-ink-50/50"
                     >
                       <td className="px-4 py-3 font-mono text-xs font-semibold text-accent-600 whitespace-nowrap">
-                        {q.quotationNo}
+                        <button
+                          onClick={() => setViewQuotationNo(q.quotationNo)}
+                          className="hover:underline hover:text-accent-700 transition-colors cursor-pointer"
+                          title="View quotation"
+                        >
+                          {q.quotationNo}
+                        </button>
                       </td>
                       <td className="px-4 py-3 font-medium text-ink-900 max-w-[220px] truncate" title={q.customerName}>
                         {q.customerName}
@@ -200,7 +208,30 @@ export default function QuotationsPage() {
                           {q.status || "Active"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap" />
+                      <td className="px-4 py-3 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openQuotationForEdit(q.quotationNo);
+                            }}
+                            className="p-1.5 rounded-md text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors cursor-pointer"
+                            title="Edit"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFollowUpQuotationNo(q.quotationNo);
+                            }}
+                            className="p-1.5 rounded-md text-green-600 hover:text-green-700 hover:bg-green-50 transition-colors cursor-pointer"
+                            title="Next Follow-up"
+                          >
+                            <Calendar className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -209,6 +240,44 @@ export default function QuotationsPage() {
           </Card>
         )}
       </div>
+
+      {viewQuotationNo && (
+        <QuotationDetailsModal
+          quotationNo={viewQuotationNo}
+          onClose={() => setViewQuotationNo(null)}
+        />
+      )}
+
+      {followUpQuotationNo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-ink-950/40 cursor-pointer"
+            onClick={() => setFollowUpQuotationNo(null)}
+          />
+          <div className="relative w-full max-w-md bg-white rounded-xl shadow-xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-ink-900">Next Follow-up</h2>
+              <button
+                onClick={() => setFollowUpQuotationNo(null)}
+                className="rounded-md p-1.5 text-ink-300 hover:text-ink-600 hover:bg-ink-50 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-sm text-ink-600 mb-4">
+              Quotation: {followUpQuotationNo}
+            </p>
+            <p className="text-sm text-ink-400 italic">
+              Follow-up details will be added here.
+            </p>
+            <div className="mt-6 flex justify-end">
+              <Button onClick={() => setFollowUpQuotationNo(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       </AppShell>
   );
