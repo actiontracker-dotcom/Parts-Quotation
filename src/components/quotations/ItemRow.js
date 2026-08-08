@@ -19,7 +19,12 @@ function ItemRow({ index, row, errors, onChange, onRemove, canRemove }) {
   const lineTotal = computeLineTotal(row);
 
   const handlePartSelect = useCallback((part) => {
-    onChange(row.id, "partNumber", part.partNo || "");
+    const selectedPartNo = part.partNo || "";
+    // Only clear carrier fields when a DIFFERENT part is actually selected, so a
+    // manually typed Other Rate is never wiped while the user merely edits fields.
+    const isDifferentPart = Boolean(selectedPartNo && selectedPartNo !== row.partNumber);
+
+    onChange(row.id, "partNumber", selectedPartNo);
     onChange(row.id, "partDescription", part.description || "");
     onChange(row.id, "priceWef", toDateStr(part.applicableDate));
     onChange(row.id, "availability", part.stockStatus || "");
@@ -33,7 +38,13 @@ function ItemRow({ index, row, errors, onChange, onRemove, canRemove }) {
     onChange(row.id, "lastPurchaseDate", part.lastPurchaseDate != null ? String(part.lastPurchaseDate) : "");
     onChange(row.id, "totalQty", part.totalQty != null ? String(part.totalQty) : "");
     onChange(row.id, "totalPrice", part.totalPrice != null ? String(part.totalPrice) : "");
-  }, [row.id, onChange]);
+    // The parts master has no "Other Rate" column, so a different part must not
+    // carry over the previous part's Other Rate. Reset to the app's empty/zero
+    // placeholder (same as createEmptyItemRow) instead of reusing the old value.
+    if (isDifferentPart) {
+      onChange(row.id, "otherRate", "");
+    }
+  }, [row.id, row.partNumber, onChange]);
 
   return (
     <div className="group relative rounded-lg border border-ink-100 bg-surface-sunken/40 p-4 transition-colors hover:border-accent-200 sm:p-5">

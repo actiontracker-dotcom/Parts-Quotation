@@ -1,20 +1,28 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { FileText, Plus, Eye, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { FileText, Plus, Search } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import QuotationDetailsModal from "@/components/quotations/QuotationDetailsModal";
 import { formatCurrency } from "@/lib/utils/formatters";
 
 export default function QuotationsPage() {
   const [quotations, setQuotations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [viewQuotationNo, setViewQuotationNo] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const router = useRouter();
+
+  const openQuotationForEdit = useCallback(
+    (quotationNo) => {
+      router.push(`/quotations/${encodeURIComponent(quotationNo)}/edit`);
+    },
+    [router]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -167,7 +175,8 @@ export default function QuotationsPage() {
                   {displayQuotations.map((q, i) => (
                     <tr
                       key={q.quotationNo}
-                      className="border-b border-ink-50 transition-colors hover:bg-ink-50/50"
+                      onClick={() => openQuotationForEdit(q.quotationNo)}
+                      className="border-b border-ink-50 transition-colors hover:bg-ink-50/50 cursor-pointer"
                     >
                       <td className="px-4 py-3 font-mono text-xs font-semibold text-accent-600 whitespace-nowrap">
                         {q.quotationNo}
@@ -191,15 +200,7 @@ export default function QuotationsPage() {
                           {q.status || "Active"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <button
-                          onClick={() => setViewQuotationNo(q.quotationNo)}
-                          className="inline-flex items-center justify-center h-8 w-8 rounded-md text-ink-400 hover:text-accent-600 hover:bg-accent-50 transition-colors cursor-pointer"
-                          title="View"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap" />
                     </tr>
                   ))}
                 </tbody>
@@ -209,12 +210,6 @@ export default function QuotationsPage() {
         )}
       </div>
 
-      {viewQuotationNo && (
-        <QuotationDetailsModal
-          quotationNo={viewQuotationNo}
-          onClose={() => setViewQuotationNo(null)}
-        />
-      )}
-    </AppShell>
+      </AppShell>
   );
 }

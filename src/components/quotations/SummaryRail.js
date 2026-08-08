@@ -15,7 +15,7 @@ function LedgerLine({ label, value, muted }) {
   );
 }
 
-export default function SummaryRail({ totals, submitting, onSubmit, customer, quotation, items, quotationId }) {
+export default function SummaryRail({ totals, submitting, onSubmit, customer, quotation, items, quotationId, isEdit = false }) {
   const [downloading, setDownloading] = useState(false);
   const [pulse, setPulse] = useState(false);
   const prevTotal = useRef(totals.grandTotal);
@@ -88,10 +88,12 @@ export default function SummaryRail({ totals, submitting, onSubmit, customer, qu
             onClick={onSubmit}
             className="w-full"
           >
-            {submitting ? "Submitting" : "Submit Quotation"}
+            {submitting ? (isEdit ? "Saving" : "Submitting") : isEdit ? "Save Changes" : "Submit Quotation"}
           </Button>
           <p className="text-center text-xs text-ink-300">
-            Saved directly to your Google Sheet on submit.
+            {isEdit
+              ? "Saves changes to this quotation in your Google Sheet."
+              : "Saved directly to your Google Sheet on submit."}
           </p>
         </div>
       </div>

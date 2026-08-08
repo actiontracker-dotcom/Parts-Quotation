@@ -870,6 +870,15 @@ const DATA_SHEET_HEADERS = [
   "Revised Quotation Form",
 ];
 
+// Canonical quotation data columns the app reads/writes: Timestamp..GST Amount,
+// i.e. range A:AU (47 columns). Columns beyond AU (Status, Revised Quotation
+// Form) exist in the sheet but are outside the managed range, so quotation
+// rows must never be sized wider than this.
+const CANONICAL_DATA_HEADERS = DATA_SHEET_HEADERS.slice(
+  0,
+  DATA_SHEET_HEADERS.indexOf("GST Amount") + 1
+);
+
 async function ensureDataHeadersLoaded() {
   if (dataHeadersCache) return;
 
@@ -886,14 +895,18 @@ async function ensureDataHeadersLoaded() {
 
   dataHeadersLoadPromise = (async () => {
     console.time("sheets-load-data-headers");
-    // Only read the first row (headers) to avoid loading thousands of quotation rows.
-    const rows = await readSheetRange(DATA_SHEET_TAB, "1:1");
+    // Read the canonical quotation data range (A:AU). This keeps the header map
+    // sized to exactly the columns the app reads/writes (Timestamp..GST Amount).
+    // Reading an unbounded range (e.g. "1:1") would pick up trailing columns
+    // beyond AU (Status, Revised Quotation Form) and produce rows wider than the
+    // A:AU schema, which breaks updateSheetRow writes to the A:AU range.
+    const rows = await readSheetRange(DATA_SHEET_TAB, "A:AU");
     console.timeEnd("sheets-load-data-headers");
 
     if (rows && rows.length > 0) {
       dataHeadersCache = buildHeaderMap(rows[0]);
     } else {
-      dataHeadersCache = buildHeaderMap(DATA_SHEET_HEADERS);
+      dataHeadersCache = buildHeaderMap(CANONICAL_DATA_HEADERS);
     }
 
     storeGlobalCache();
@@ -920,7 +933,7 @@ export async function buildQuotationRows(quotation, { quotationId, createdAt }) 
   const { customer, quotation: info, items } = quotation;
   await ensureDataHeadersLoaded();
 
-  const headers = dataHeadersCache || buildHeaderMap(DATA_SHEET_HEADERS);
+  const headers = dataHeadersCache || buildHeaderMap(CANONICAL_DATA_HEADERS);
   const numCols = Object.keys(headers).length;
 
   function calcSubAmount(item) {
@@ -1009,6 +1022,67 @@ export async function appendQuotation(quotation, meta) {
   // sheet as it exists after this write.
 
   return { rowsWritten: rows.length };
+}
+
+// ─── QUOTATION UPDATE (EDIT) ─────────────────────────────────────────────────────
+// Updates the existing DATA-sheet rows that belong to the given quotation number.
+// The quotation number is treated as the unique identifier and is NEVER changed.
+//
+// Strategy (kept safe for the shared DATA sheet):
+// - Load the live sheet rows once, find every row whose "Quotation No" equals the
+//   target, and remember their sheet row numbers.
+// - Rewrite the first N new items over the first N existing rows of that quotation.
+// - If there are more new items than old rows, append the surplus rows at the end
+//   (grouping by quotation number is preserved on read, so this stays consistent).
+// - If there are fewer new items than old rows, clear the leftover rows so no stale
+//   item rows remain for the quotation.
+// Unrelated rows are never touched, and no new quotation number is generated.
+export async function updateQuotationByNo(quotationNo, quotation) {
+  const rows = await readSheetRange(DATA_SHEET_TAB, "A:AU");
+
+  if (!rows || rows.length < 2) return { success: false, reason: "empty" };
+
+  const headers = buildHeaderMap(rows[0]);
+
+  const targetRowIndices = [];
+  for (let i = 1; i < rows.length; i++) {
+    if (getCellValue(rows[i], headers, "Quotation No") === quotationNo) {
+      targetRowIndices.push(i);
+    }
+  }
+
+  if (targetRowIndices.length === 0) {
+    return { success: false, reason: "not-found" };
+  }
+
+  const createdAt = getCellValue(rows[targetRowIndices[0]], headers, "Timestamp");
+  const numCols = rows[0].length;
+  const lastCol = getColumnLetter(numCols - 1);
+
+  const newRows = await buildQuotationRows(quotation, { quotationId: quotationNo, createdAt });
+
+  const sheetRows = targetRowIndices.map((i) => i + 1);
+  let rowsWritten = 0;
+  let rowsAppended = 0;
+  let rowsCleared = 0;
+
+  for (let k = 0; k < Math.min(newRows.length, sheetRows.length); k++) {
+    await updateSheetRow(DATA_SHEET_TAB, `A${sheetRows[k]}:${lastCol}${sheetRows[k]}`, [newRows[k]]);
+    rowsWritten += 1;
+  }
+
+  if (newRows.length > sheetRows.length) {
+    const extra = newRows.slice(sheetRows.length);
+    await appendSheetRows(DATA_SHEET_TAB, extra);
+    rowsAppended = extra.length;
+  } else if (newRows.length < sheetRows.length) {
+    for (let k = newRows.length; k < sheetRows.length; k++) {
+      await clearSheetRange(DATA_SHEET_TAB, `A${sheetRows[k]}:${lastCol}${sheetRows[k]}`);
+      rowsCleared += 1;
+    }
+  }
+
+  return { success: true, quotationNo, rowsWritten, rowsAppended, rowsCleared };
 }
 
 // ─── QUOTATION LIST ─────────────────────────────────────────────────────────────
