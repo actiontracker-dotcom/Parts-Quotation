@@ -71,9 +71,6 @@ function validateNextFollowup(body) {
   if (!stringValue(body.followupRemark)) {
     errors.followupRemark = "Remark is required.";
   }
-  if (!stringValue(body.followupStatus)) {
-    errors.followupStatus = "Follow-up status is required.";
-  }
   return errors;
 }
 
@@ -121,7 +118,6 @@ export async function POST(request, { params }) {
       const result = await updateQuotationNextFollowup(normalizedQuotationNo, {
         nextFollowupDate: stringValue(body.nextFollowupDate),
         followupRemark: stringValue(body.followupRemark),
-        followupStatus: stringValue(body.followupStatus),
       });
 
       if (!result.success) {
@@ -142,9 +138,7 @@ export async function POST(request, { params }) {
       return NextResponse.json(
         {
           success: true,
-          message: "Next follow-up submitted successfully.",
-          quotationNo: normalizedQuotationNo,
-          rowsUpdated: result.data.rowsUpdated,
+          message: "Next follow-up saved successfully",
         },
         { status: 200 }
       );

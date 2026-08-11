@@ -213,9 +213,12 @@ export default function QuotationFollowupsPanel({ quotationNo, onDataChanged }) 
               className="rounded-lg border border-ink-100 bg-ink-50/40 p-4 space-y-2"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-medium text-ink-400">
-                  {record.Timestamp ? formatDateTime(record.Timestamp) : `#${idx + 1}`}
-                </p>
+                <div>
+                  <p className="text-xs font-semibold text-ink-700">Follow-up #{records.length - idx}</p>
+                  <p className="text-xs font-medium text-ink-400 mt-0.5">
+                    {record.Timestamp ? formatDateTime(record.Timestamp) : ""}
+                  </p>
+                </div>
                 <TypeBadge type={record["Submission Type"]} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">

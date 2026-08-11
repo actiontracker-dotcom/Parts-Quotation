@@ -8,11 +8,10 @@ import Textarea from "@/components/ui/Textarea";
 import Select from "@/components/ui/Select";
 import { useToast } from "@/hooks/useToast";
 import {
-  FOLLOWUP_STATUS_OPTIONS,
   ORDER_STATUS_OPTIONS,
 } from "@/lib/constants/quotationOptions";
 
-const EMPTY_NEXT_FORM = { nextFollowupDate: "", followupRemark: "", followupStatus: "" };
+const EMPTY_NEXT_FORM = { nextFollowupDate: "", followupRemark: "" };
 const EMPTY_ORDER_FORM = {
   orderStatus: "",
   orderNumber: "",
@@ -21,7 +20,7 @@ const EMPTY_ORDER_FORM = {
 };
 
 export default function QuotationFollowupModal({ quotationNo, onClose, onDataChanged }) {
-  const { toast } = useToast();
+  const toast = useToast();
   const [view, setView] = useState("menu"); // "menu" | "next" | "order"
   const [nextForm, setNextForm] = useState(EMPTY_NEXT_FORM);
   const [orderForm, setOrderForm] = useState(EMPTY_ORDER_FORM);
@@ -67,9 +66,18 @@ export default function QuotationFollowupModal({ quotationNo, onClose, onDataCha
     );
 
     const contentType = res.headers.get("content-type") || "";
-    let result;
+    let result = {};
     if (contentType.includes("application/json")) {
-      result = await res.json();
+      try {
+        result = await res.json();
+      } catch {
+        if (res.ok) {
+          throw new Error(
+            "The follow-up may have been saved, but the server response could not be read. Please check the Follow-up History before submitting again."
+          );
+        }
+        result = {};
+      }
     } else {
       const text = await res.text();
       throw new Error(
@@ -77,11 +85,15 @@ export default function QuotationFollowupModal({ quotationNo, onClose, onDataCha
       );
     }
 
+    if (typeof result !== "object" || result === null) {
+      result = {};
+    }
+
     if (!res.ok || !result.success) {
       const error = new Error(
-        result?.message || `Request failed with status ${res.status}`
+        result.message || `Request failed with status ${res.status}`
       );
-      error.fieldErrors = (result && result.errors) || {};
+      error.fieldErrors = result.errors || {};
       throw error;
     }
 
@@ -92,8 +104,11 @@ export default function QuotationFollowupModal({ quotationNo, onClose, onDataCha
   // errors and JSON parse errors carry a concrete server message instead.
   function errorMessage(err, fallback) {
     if (err instanceof TypeError || typeof err?.message === "string") {
-      if (/Failed to fetch|NetworkError|load failed/i.test(err.message)) {
-        return "Network error. Please try again.";
+      if (/Failed to fetch|NetworkError|load failed|fetch failed|network error|network request failed|ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT/i.test(err.message)) {
+        return "Network error. The submission may have already been saved — please check the Follow-up History before submitting again.";
+      }
+      if (err instanceof TypeError) {
+        return fallback;
       }
       return err.message || fallback;
     }
@@ -125,9 +140,6 @@ export default function QuotationFollowupModal({ quotationNo, onClose, onDataCha
     if (!nextForm.followupRemark.trim()) {
       errors.followupRemark = "Remark is required.";
     }
-    if (!nextForm.followupStatus.trim()) {
-      errors.followupStatus = "Follow-up status is required.";
-    }
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       return;
@@ -140,14 +152,8 @@ export default function QuotationFollowupModal({ quotationNo, onClose, onDataCha
         submissionType: "Next Follow-up",
         nextFollowupDate: nextForm.nextFollowupDate.trim(),
         followupRemark: nextForm.followupRemark.trim(),
-        followupStatus: nextForm.followupStatus.trim(),
       });
       saved = true;
-
-      toast.success("Next follow-up saved", `Follow-up for ${quotationNo} saved.`);
-      setNextForm(EMPTY_NEXT_FORM);
-      setFieldErrors({});
-      backToMenu();
     } catch (err) {
       if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
         setFieldErrors(err.fieldErrors);
@@ -157,9 +163,15 @@ export default function QuotationFollowupModal({ quotationNo, onClose, onDataCha
       setSaving(false);
     }
 
-    // The save succeeded; refresh separately so a refresh problem can never
-    // be mistaken for a failed save.
     if (saved) {
+      try {
+        toast.success("Next follow-up saved", `Follow-up for ${quotationNo} saved.`);
+      } catch (uiError) {
+        console.error("Follow-up saved, but the success toast failed:", uiError);
+      }
+      setNextForm(EMPTY_NEXT_FORM);
+      setFieldErrors({});
+      backToMenu();
       await refreshQuotationList();
     }
   }
@@ -186,8 +198,6 @@ export default function QuotationFollowupModal({ quotationNo, onClose, onDataCha
         remarkForOrder: orderForm.remarkForOrder.trim(),
       });
       saved = true;
-
-      toast.success("Order status saved", `Order status for ${quotationNo} saved.`);
     } catch (err) {
       if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
         setFieldErrors(err.fieldErrors);
@@ -198,6 +208,11 @@ export default function QuotationFollowupModal({ quotationNo, onClose, onDataCha
     }
 
     if (saved) {
+      try {
+        toast.success("Order status saved", `Order status for ${quotationNo} saved.`);
+      } catch (uiError) {
+        console.error("Order status saved, but the success toast failed:", uiError);
+      }
       await refreshQuotationList();
       onClose();
     }
@@ -258,15 +273,6 @@ export default function QuotationFollowupModal({ quotationNo, onClose, onDataCha
                 value={nextForm.followupRemark}
                 onChange={(e) => updateNext("followupRemark", e.target.value)}
                 error={fieldErrors.followupRemark}
-              />
-              <Select
-                label="Follow-up Status"
-                required
-                options={FOLLOWUP_STATUS_OPTIONS}
-                placeholder="Select follow-up status"
-                value={nextForm.followupStatus}
-                onChange={(e) => updateNext("followupStatus", e.target.value)}
-                error={fieldErrors.followupStatus}
               />
 
               {submitError && (

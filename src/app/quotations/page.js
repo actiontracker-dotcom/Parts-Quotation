@@ -57,8 +57,7 @@ export default function QuotationsPage() {
       (item) =>
         item.quotationNo.toLowerCase().includes(q) ||
         (item.customerName && item.customerName.toLowerCase().includes(q)) ||
-        (item.division && item.division.toLowerCase().includes(q)) ||
-        (item.engineer && item.engineer.toLowerCase().includes(q))
+        (item.division && item.division.toLowerCase().includes(q))
     );
   }, [quotations, searchQuery]);
 
@@ -111,7 +110,7 @@ export default function QuotationsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-ink-50 border-b border-ink-100">
-                    {["Quotation No", "Customer", "Date", "Division", "Engineer", "Items", "Total Amount", "Status", "Actions"].map((h) => (
+                    {["Quotation No", "Customer", "Contact Number", "Division", "NOF", "Order Status", "Total Amount", "Actions"].map((h) => (
                       <th key={h} className="px-4 py-3 text-left font-semibold text-ink-600 whitespace-nowrap">
                         {h}
                       </th>
@@ -121,7 +120,7 @@ export default function QuotationsPage() {
                 <tbody>
                   {Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 9 }).map((_, j) => (
+                      {Array.from({ length: 8 }).map((_, j) => (
                         <td key={j} className="px-4 py-3">
                           <div className="h-4 bg-ink-100 rounded animate-pulse" style={{ width: `${65 + ((i * 7 + j * 13) % 30)}%` }} />
                         </td>
@@ -164,7 +163,7 @@ export default function QuotationsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-ink-50 border-b border-ink-100">
-                    {["Quotation No", "Customer", "Date", "Division", "Engineer", "Items", "Total Amount", "Status", "Actions"].map((h) => (
+                    {["Quotation No", "Customer", "Contact Number", "Division", "NOF", "Order Status", "Total Amount", "Actions"].map((h) => (
                       <th key={h} className="px-4 py-3 text-left font-semibold text-ink-600 whitespace-nowrap">
                         {h}
                       </th>
@@ -186,24 +185,23 @@ export default function QuotationsPage() {
                           {q.quotationNo}
                         </button>
                       </td>
-                      <td className="px-4 py-3 font-medium text-ink-900 max-w-[220px] truncate" title={q.customerName}>
+                      <td className="px-4 py-3 max-w-[220px] truncate font-medium text-ink-900" title={q.customerName}>
                         {q.customerName}
                       </td>
                       <td className="px-4 py-3 text-ink-600 whitespace-nowrap">
-                        {q.quotationDate || "-"}
+                        {q.contactNumber || "-"}
                       </td>
                       <td className="px-4 py-3 text-ink-600">{q.division || "-"}</td>
-                      <td className="px-4 py-3 text-ink-600">{q.engineer || "-"}</td>
                       <td className="px-4 py-3 text-ink-600 font-medium">
-                        {q.itemCount} item{q.itemCount === 1 ? "" : "s"}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-sm font-semibold text-ink-900">
-                        {formatCurrency(q.totalAmount)}
+                        {q.numberOfFollowup || "-"}
                       </td>
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent-50 text-accent-700">
-                          {q.status || "Active"}
+                          {q.orderStatus || "-"}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-sm font-semibold text-ink-900">
+                        {formatCurrency(q.totalAmount)}
                       </td>
                       <td className="px-4 py-3 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-2">

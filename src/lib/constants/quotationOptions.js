@@ -46,8 +46,7 @@ export const ORDER_STATUS_OPTIONS = [
   { value: "Won", label: "Won" },
   { value: "Loss", label: "Loss" },
   { value: "Dead", label: "Dead" },
-  { value: "Parcel", label: "Parcel" },
-  { value: "Pending", label: "Pending" },
+  { value: "Partial", label: "Partial" },
 ];
 
 export function createEmptyItemRow() {
