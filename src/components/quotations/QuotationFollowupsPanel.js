@@ -1,8 +1,23 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Inbox, RefreshCw } from "lucide-react";
+import {
+  Loader2,
+  Inbox,
+  RefreshCw,
+  Clock,
+  CalendarClock,
+  PackageCheck,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  CircleDot,
+  ClipboardList,
+  StickyNote,
+  History,
+} from "lucide-react";
 import Button from "@/components/ui/Button";
+import { cn } from "@/lib/utils/cn";
 import { formatDateTime } from "@/lib/utils/formatters";
 
 // Display metadata for known history columns. Values not listed here (future /
@@ -47,15 +62,52 @@ const COLUMN_LABELS = {
 
 const INTERNAL_KEYS = new Set(["__sheetRow"]);
 
+// Columns that are never shown in the quotation detail Follow-up cards. These
+// are still stored/returned by the API and appear on /followups — they are only
+// hidden here because the quotation number is already shown at the top of the
+// details modal and the follow-up status is not relevant inside the card.
+const HIDDEN_KEYS = new Set(["Quotation No", "Followup Status"]);
+
+// Presentation metadata per submission type (icon + soft badge/avatar colors).
+const TYPE_META = {
+  "Next Follow-up": {
+    icon: CalendarClock,
+    badgeClass: "bg-accent-50 text-accent-700",
+    avatarClass: "bg-accent-50 text-accent-600",
+  },
+  "Order Status": {
+    icon: PackageCheck,
+    badgeClass: "bg-amber-50 text-amber-700",
+    avatarClass: "bg-amber-50 text-amber-600",
+  },
+};
+
+const FALLBACK_TYPE = {
+  icon: ClipboardList,
+  badgeClass: "bg-ink-100 text-ink-600",
+  avatarClass: "bg-ink-100 text-ink-600",
+};
+
+// Soft enterprise pills for known order/follow-up status values.
+const STATUS_STYLES = {
+  Won: { className: "bg-teal-50 text-teal-700", icon: CheckCircle2 },
+  Loss: { className: "bg-danger-50 text-danger-600", icon: XCircle },
+  Dead: { className: "bg-danger-50 text-danger-600", icon: XCircle },
+  Partial: { className: "bg-amber-50 text-amber-700", icon: AlertCircle },
+  Pending: { className: "bg-amber-50 text-amber-700", icon: Clock },
+  Completed: { className: "bg-teal-50 text-teal-700", icon: CheckCircle2 },
+};
+
 function visibleColumns(record) {
   const entries = COLUMN_ORDER
-    .filter((key) => !INTERNAL_KEYS.has(key) && hasValue(record[key]))
+    .filter((key) => !INTERNAL_KEYS.has(key) && !HIDDEN_KEYS.has(key) && hasValue(record[key]))
     .map((key) => ({ key, label: COLUMN_LABELS[key] || key, value: record[key] }));
 
   const extraKeys = Object.keys(record)
     .filter(
       (key) =>
         !INTERNAL_KEYS.has(key) &&
+        !HIDDEN_KEYS.has(key) &&
         !COLUMN_ORDER.includes(key) &&
         hasValue(record[key])
     )
@@ -82,25 +134,41 @@ function displayValue(key, value) {
   return String(value);
 }
 
-function TypeBadge({ type }) {
+function isRemarkField(key) {
+  return key === "Remark for Order" || key === "Followup Remark";
+}
+
+function TypePill({ type }) {
   const t = String(type || "").trim();
-  if (t === "Next Follow-up") {
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-accent-50 text-accent-700">
-        Next Follow-up
-      </span>
-    );
-  }
-  if (t === "Order Status") {
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">
-        Order Status
-      </span>
-    );
-  }
+  const meta = TYPE_META[t] || FALLBACK_TYPE;
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-ink-100 text-ink-600">
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold",
+        meta.badgeClass
+      )}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
       {t || "Record"}
+    </span>
+  );
+}
+
+function StatusBadge({ value }) {
+  const v = String(value || "").trim();
+  const meta = STATUS_STYLES[v] || {
+    className: "bg-ink-100 text-ink-600",
+    icon: CircleDot,
+  };
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold",
+        meta.className
+      )}
+    >
+      <meta.icon className="h-3.5 w-3.5" />
+      {v || "-"}
     </span>
   );
 }
@@ -150,19 +218,24 @@ export default function QuotationFollowupsPanel({ quotationNo, onDataChanged }) 
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">
-            Follow-ups
-          </h3>
-          {records && (
-            <p className="mt-0.5 text-xs text-ink-400">
-              {records.length === 0
-                ? "No follow-up history yet"
-                : `${records.length} record${records.length === 1 ? "" : "s"}`}
-            </p>
-          )}
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-50 text-accent-600">
+            <History className="h-[18px] w-[18px]" />
+          </span>
+          <div>
+            <h3 className="text-sm font-semibold tracking-wide text-ink-900">
+              Follow-ups
+            </h3>
+            {records && (
+              <p className="mt-0.5 text-xs text-ink-400">
+                {records.length === 0
+                  ? "No follow-up history yet"
+                  : `${records.length} record${records.length === 1 ? "" : "s"}`}
+              </p>
+            )}
+          </div>
         </div>
         <Button
           variant="subtle"
@@ -206,38 +279,92 @@ export default function QuotationFollowupsPanel({ quotationNo, onDataChanged }) 
       )}
 
       {!loading && !error && records.length > 0 && (
-        <div className="space-y-3">
-          {records.map((record, idx) => (
-            <div
-              key={idx}
-              className="rounded-lg border border-ink-100 bg-ink-50/40 p-4 space-y-2"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="text-xs font-semibold text-ink-700">Follow-up #{records.length - idx}</p>
-                  <p className="text-xs font-medium text-ink-400 mt-0.5">
-                    {record.Timestamp ? formatDateTime(record.Timestamp) : ""}
-                  </p>
-                </div>
-                <TypeBadge type={record["Submission Type"]} />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                {visibleColumns(record)
-                  .filter((col) => col.key !== "Timestamp" && col.key !== "Submission Type")
-                  .map((col) => (
-                    <div
-                      key={col.key}
-                      className={col.value && String(col.value).length > 60 ? "sm:col-span-2" : ""}
-                    >
-                      <p className="text-xs font-medium text-ink-400">{col.label}</p>
-                      <p className="text-sm text-ink-800 whitespace-pre-wrap break-words">
-                        {displayValue(col.key, col.value)}
-                      </p>
+        <div className="relative">
+          {/* subtle vertical timeline rail */}
+          <div aria-hidden className="absolute inset-y-0 left-[6px] w-px bg-ink-100" />
+
+          <div className="space-y-5">
+            {records.map((record, idx) => {
+              const isOrderRecord =
+                String(record["Submission Type"] || "").trim() === "Order Status";
+              const typeMeta = TYPE_META[String(record["Submission Type"] || "").trim()] || FALLBACK_TYPE;
+              const TypeIcon = typeMeta.icon;
+              const cols = visibleColumns(record).filter(
+                (col) => col.key !== "Timestamp" && col.key !== "Submission Type"
+              );
+
+              return (
+                <div key={idx} className="relative pl-7 sm:pl-10">
+                  {/* timeline node */}
+                  <span
+                    aria-hidden
+                    className="absolute left-0 top-[35px] h-[13px] w-[13px] rounded-full border-2 border-white bg-accent-500 shadow-sm sm:top-[39px]"
+                  />
+
+                  <article className="rounded-2xl border border-ink-100 bg-white p-5 shadow-card transition-all duration-150 hover:border-ink-200 hover:shadow-card-hover sm:p-6">
+                    <header className="flex flex-wrap items-start justify-between gap-3 pb-5">
+                      <div className="flex items-start gap-3.5">
+                        <span
+                          className={cn(
+                            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
+                            typeMeta.avatarClass
+                          )}
+                        >
+                          <TypeIcon className="h-5 w-5" />
+                        </span>
+                        <div>
+                          <h4 className="text-lg font-semibold tracking-tight text-ink-900">
+                            Follow-up #{records.length - idx}
+                          </h4>
+                          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-ink-400">
+                            <Clock className="h-3.5 w-3.5" />
+                            {record.Timestamp ? formatDateTime(record.Timestamp) : "—"}
+                          </p>
+                        </div>
+                      </div>
+                      <TypePill type={record["Submission Type"]} />
+                    </header>
+
+                    <div className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
+                      {cols.map((col) => {
+                        const isRemark = isRemarkField(col.key);
+                        const isLong = col.value && String(col.value).length > 60;
+                        const isFullWidthRemark = isOrderRecord && isRemark;
+                        const spanFull =
+                          isFullWidthRemark ||
+                          (isLong && !isRemark) ||
+                          (isOrderRecord &&
+                            (col.key === "Order Received date" || col.key === "Order Date"));
+                        const showNoteBox = isFullWidthRemark || (isRemark && isLong);
+
+                        return (
+                          <div key={col.key} className={spanFull ? "sm:col-span-2" : ""}>
+                            <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+                              {isRemark && <StickyNote className="h-3 w-3" />}
+                              {col.label}
+                            </p>
+                            {col.key === "Order Status" && hasValue(col.value) ? (
+                              <div className="mt-2">
+                                <StatusBadge value={col.value} />
+                              </div>
+                            ) : showNoteBox ? (
+                              <div className="mt-2 rounded-xl border border-ink-100 bg-ink-50/60 px-3.5 py-2.5 text-sm leading-relaxed text-ink-800 whitespace-pre-wrap break-words">
+                                {displayValue(col.key, col.value)}
+                              </div>
+                            ) : (
+                              <p className="mt-2 text-[15px] font-medium text-ink-900 whitespace-pre-wrap break-words">
+                                {displayValue(col.key, col.value)}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-              </div>
-            </div>
-          ))}
+                  </article>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
