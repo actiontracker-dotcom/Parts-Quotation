@@ -62,10 +62,10 @@ const COLUMN_LABELS = {
 
 const INTERNAL_KEYS = new Set(["__sheetRow"]);
 
-// Columns that are never shown in the quotation detail Follow-up cards. These
-// are still stored/returned by the API and appear on /followups — they are only
-// hidden here because the quotation number is already shown at the top of the
-// details modal and the follow-up status is not relevant inside the card.
+// Columns that are never shown in the quotation detail Follow-up cards. They
+// are still stored/returned by the API — they are only hidden here because the
+// quotation number is already shown at the top of the details modal and the
+// follow-up status is not relevant inside the card.
 const HIDDEN_KEYS = new Set(["Quotation No", "Followup Status"]);
 
 // Presentation metadata per submission type (icon + soft badge/avatar colors).

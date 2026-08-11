@@ -31,14 +31,6 @@ export const TERMS_OF_DELIVERY_OPTIONS = [
   { value: "cif", label: "CIF" },
 ];
 
-// Follow-up status values for the "Next Follow-up" submission.
-// No existing status list existed in the project, so a sensible, business
-// compatible pair is used: Pending / Completed.
-export const FOLLOWUP_STATUS_OPTIONS = [
-  { value: "Pending", label: "Pending" },
-  { value: "Completed", label: "Completed" },
-];
-
 // Order status values for the "Order Status" submission. Business values used
 // across the sales pipeline; kept in one place so the UI and the log sheet
 // always agree.

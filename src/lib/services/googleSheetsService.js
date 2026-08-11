@@ -1635,19 +1635,6 @@ export async function getQuotationFollowupHistory(quotationNo) {
   return records.filter((record) => record["Quotation No"] === quotationNo);
 }
 
-/**
- * Returns ALL follow-up / order-status history from "Followup Form for
- * Quotation", newest first. Used by the Follow-ups page.
- *
- * - Only the history sheet is read — the large Data sheet is never loaded
- *   here. Quotation-level current state stays in the Data sheet and is fetched
- *   separately only when the caller needs it.
- * - READ-ONLY: never modifies the history sheet.
- */
-export async function getAllFollowupRecords() {
-  return readFollowupFormRecords();
-}
-
 // ─── QUOTATION FOLLOW-UP UPDATE (DATA SHEET) ────────────────────────────────────
 // Updates ONLY the follow-up fields of an existing DATA-sheet quotation.
 //
