@@ -1158,12 +1158,27 @@ export async function appendQuotation(quotation, meta) {
   // sheet as it exists after this write.
 
   // Google Sheets values.append() acknowledges the write before the new row is
-  // guaranteed to be visible to a subsequent values.get() call, especially
-  // across different Vercel serverless instances. Verify that the newly-created
-  // quotation is actually readable before telling the caller that creation is
-  // complete. Retry up to 5 times with a 600 ms gap between attempts.
-  const MAX_VERIFY_ATTEMPTS = 5;
-  const VERIFY_DELAY_MS = 600;
+  // guaranteed to be visible to *other* HTTP connections / Vercel serverless
+  // instances (eventual consistency across read replicas).
+  //
+  // IMPORTANT: reading back from the SAME Lambda invocation that performed the
+  // write always succeeds immediately (strong read-after-write consistency
+  // within the same API session), so a same-instance verification loop gives
+  // false confidence — it passes instantly while OTHER instances are still
+  // serving stale state.
+  //
+  // Fix: wait 2 seconds unconditionally BEFORE verifying. This gives Google
+  // Sheets time to propagate the write across all read replicas so that any
+  // subsequent Lambda invocation (handling the client's detail GET) will see
+  // the new row. Then verify up to 3 times (1-second gap each) in case
+  // propagation takes slightly longer under load.
+  const PROPAGATION_WAIT_MS = 2000;
+  const MAX_VERIFY_ATTEMPTS = 3;
+  const VERIFY_DELAY_MS = 1000;
+
+  // Unconditional propagation window — ensures cross-instance visibility.
+  await new Promise((resolve) => setTimeout(resolve, PROPAGATION_WAIT_MS));
+
   let verified = false;
   for (let attempt = 0; attempt < MAX_VERIFY_ATTEMPTS; attempt++) {
     if (attempt > 0) {
@@ -1181,7 +1196,7 @@ export async function appendQuotation(quotation, meta) {
     // within the verification window. Surface this so the caller can return an
     // appropriate error instead of falsely reporting successful creation.
     throw new Error(
-      `Quotation ${meta.quotationId} was written but could not be confirmed readable after ${MAX_VERIFY_ATTEMPTS} attempts. Please try again in a moment.`
+      `Quotation ${meta.quotationId} was written but could not be confirmed readable after ${MAX_VERIFY_ATTEMPTS} verification attempts. Please try again in a moment.`
     );
   }
 

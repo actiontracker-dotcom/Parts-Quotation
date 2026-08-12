@@ -16,11 +16,11 @@ export default function QuotationDetailsModal({ quotationNo, onClose }) {
     setLoading(true);
     setError(null);
 
-    // Retry up to 3 times for HTTP 404 only (Google Sheets read-after-write
+    // Retry up to 5 times for HTTP 404 only (Google Sheets read-after-write
     // propagation delay). All other status codes and network errors are handled
     // on the first attempt without retrying.
-    const MAX_ATTEMPTS = 3;
-    const RETRY_DELAY_MS = 1000;
+    const MAX_ATTEMPTS = 5;
+    const RETRY_DELAY_MS = 1500;
 
     (async () => {
       for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
