@@ -18,6 +18,18 @@ const NO_STORE_HEADERS = { "Cache-Control": "no-store, max-age=0, must-revalidat
 export async function GET() {
   try {
     const quotations = await getQuotations();
+
+    // DIAGNOSTIC: Check if Q000009 exists in LIST response
+    const q000009InList = quotations.some(q => q.quotationNo.includes('Q000009'));
+    console.log('[GET /api/quotations] Q000009 in list response:', q000009InList);
+    console.log('[GET /api/quotations] Total quotations in response:', quotations.length);
+
+    // DIAGNOSTIC: Log Q000009 details if found
+    const q000009Entry = quotations.find(q => q.quotationNo.includes('Q000009'));
+    if (q000009Entry) {
+      console.log('[GET /api/quotations] Q000009 entry:', q000009Entry);
+    }
+
     return NextResponse.json({ success: true, data: quotations }, { headers: NO_STORE_HEADERS });
   } catch (error) {
     console.error("[quotations/GET] Error:", error.message);
