@@ -18,7 +18,17 @@ export async function GET(request, { params }) {
       );
     }
 
-    const quotation = await getQuotationByNo(quotationNo);
+    // The dynamic route may deliver the quotation number percent-encoded (e.g.
+    // "DEEP%2FM-SPR%2F26-27%2FQ000001" on Vercel). Decode defensively so the
+    // lookup matches the sheet value; fall back to the original value on error.
+    let normalizedQuotationNo = quotationNo;
+    try {
+      normalizedQuotationNo = decodeURIComponent(quotationNo);
+    } catch {
+      normalizedQuotationNo = quotationNo;
+    }
+
+    const quotation = await getQuotationByNo(normalizedQuotationNo);
 
     if (!quotation) {
       return NextResponse.json(
