@@ -75,6 +75,7 @@ export async function POST(request) {
           quotationNo: quotationId,
           customer: data.customer,
           quotation: data.quotation,
+          followup: {}, // New quotations don't have followup data yet
           items: data.items,
           totals,
         },
