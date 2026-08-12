@@ -33,11 +33,7 @@ export default function QuotationDetailsModal({ quotationNo, onClose }) {
 
         let res, json;
         try {
-          // DIAGNOSTIC: Log frontend request details
-          console.log('[QuotationDetailsModal] quotationNo prop:', quotationNo);
-          const fetchUrl = `/api/quotations/${encodeURIComponent(quotationNo)}`;
-          console.log('[QuotationDetailsModal] fetch URL:', fetchUrl);
-          res = await fetch(fetchUrl);
+          res = await fetch(`/api/quotations/${encodeURIComponent(quotationNo)}`);
           json = await res.json();
         } catch (err) {
           if (cancelled) return;

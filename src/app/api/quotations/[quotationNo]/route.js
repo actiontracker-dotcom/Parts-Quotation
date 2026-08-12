@@ -11,9 +11,6 @@ export async function GET(request, { params }) {
   try {
     const { quotationNo } = params;
 
-    // DIAGNOSTIC: Log raw parameter
-    console.log('[GET /api/quotations/[quotationNo]] Raw params.quotationNo:', quotationNo);
-
     if (!quotationNo) {
       return NextResponse.json(
         { success: false, message: "Quotation number is required." },
@@ -31,13 +28,7 @@ export async function GET(request, { params }) {
       normalizedQuotationNo = quotationNo;
     }
 
-    // DIAGNOSTIC: Log normalized value
-    console.log('[GET /api/quotations/[quotationNo]] Normalized quotationNo:', normalizedQuotationNo);
-
     const quotation = await getQuotationByNo(normalizedQuotationNo);
-
-    // DIAGNOSTIC: Log result
-    console.log('[GET /api/quotations/[quotationNo]] getQuotationByNo result:', quotation ? 'FOUND' : 'NOT FOUND');
 
     if (!quotation) {
       return NextResponse.json(

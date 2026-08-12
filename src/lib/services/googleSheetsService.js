@@ -1407,14 +1407,6 @@ export async function loadQuotations() {
   const quotations = Array.from(groups.values());
   quotations.sort((a, b) => b.quotationNo.localeCompare(a.quotationNo));
 
-  // DIAGNOSTIC: Check if Q000009 exists in results
-  const q000009InList = quotations.some(q => q.quotationNo.includes('Q000009'));
-  const q000009InDetailMap = detailMap.has('DEEP/M-SPR/26-27/Q000009') || detailMap.has('Q000009') || Array.from(detailMap.keys()).some(k => k.includes('Q000009'));
-  console.log('[loadQuotations] Q000009 in quotations array:', q000009InList);
-  console.log('[loadQuotations] Q000009 in detailMap:', q000009InDetailMap);
-  console.log('[loadQuotations] Total quotations loaded:', quotations.length);
-  console.log('[loadQuotations] Total detailMap keys:', detailMap.size);
-
   return { quotations, detailMap };
 }
 
@@ -1477,18 +1469,8 @@ export async function getQuotationByNo(quotationNo) {
     normalizedQuotationNo = quotationNo;
   }
 
-  // DIAGNOSTIC: Log lookup details
-  console.log('[getQuotationByNo] Input quotationNo:', quotationNo);
-  console.log('[getQuotationByNo] Normalized quotationNo:', normalizedQuotationNo);
-  console.log('[getQuotationByNo] detailMap exists:', !!detailMap);
-  console.log('[getQuotationByNo] detailMap.size:', detailMap?.size || 0);
-  console.log('[getQuotationByNo] detailMap.has(normalizedQuotationNo):', detailMap?.has(normalizedQuotationNo));
-
-  // DIAGNOSTIC: Log some actual detailMap keys for comparison
-  if (detailMap && detailMap.size > 0) {
-    const sampleKeys = Array.from(detailMap.keys()).slice(0, 5);
-    console.log('[getQuotationByNo] Sample detailMap keys:', sampleKeys);
-  }
+  // Trim to match the detailMap key construction (getCellValue trims sheet values)
+  normalizedQuotationNo = normalizedQuotationNo.trim();
 
   const items = detailMap ? detailMap.get(normalizedQuotationNo) : null;
   if (!items || items.length === 0) return null;
