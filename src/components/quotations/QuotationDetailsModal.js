@@ -16,6 +16,24 @@ export default function QuotationDetailsModal({ quotationNo, onClose }) {
     setLoading(true);
     setError(null);
 
+    // Check sessionStorage first for newly created quotations to avoid
+    // Google Sheets read-after-write propagation delay issues.
+    const sessionKey = `new-quotation-${quotationNo}`;
+    const cachedQuotation = sessionStorage.getItem(sessionKey);
+    
+    if (cachedQuotation) {
+      try {
+        const parsed = JSON.parse(cachedQuotation);
+        setData(parsed);
+        setLoading(false);
+        return;
+      } catch (err) {
+        // If parsing fails, fall through to API call
+        console.error("Failed to parse cached quotation:", err);
+        sessionStorage.removeItem(sessionKey);
+      }
+    }
+
     // Retry up to 5 times for HTTP 404 only (Google Sheets read-after-write
     // propagation delay). All other status codes and network errors are handled
     // on the first attempt without retrying.

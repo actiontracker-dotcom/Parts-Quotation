@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { validateQuotation } from "@/lib/validation/quotationSchema";
 import { appendQuotation, getQuotations, generateNextQuotationNumber } from "@/lib/services/googleSheetsService";
 import { getSessionUser, unauthorizedResponse } from "@/lib/auth/session";
+import { computeQuotationTotals } from "@/lib/utils/formatters";
 
 // This route handles both listing and creating quotations.
 // The frontend always calls this endpoint; it never touches the sheet directly.
@@ -56,12 +57,27 @@ export async function POST(request) {
 
   try {
     const { rowsWritten } = await appendQuotation(data, { quotationId, createdAt });
+    
+    // Return the complete quotation data in the response so the client can
+    // immediately display it without needing a second Google Sheets read.
+    // This avoids the cross-instance propagation delay issue where a newly
+    // created quotation might not be immediately visible to DETAIL requests
+    // hitting different Vercel serverless instances.
+    const totals = computeQuotationTotals(data.items);
+    
     return NextResponse.json(
       {
         success: true,
         message: "Quotation submitted successfully.",
         quotationId,
         rowsWritten,
+        quotation: {
+          quotationNo: quotationId,
+          customer: data.customer,
+          quotation: data.quotation,
+          items: data.items,
+          totals,
+        },
       },
       { status: 201 }
     );

@@ -202,8 +202,20 @@ export function useQuotationForm({ mode = "create", quotationNo = null } = {}) {
 
       setLastQuotationId(result.quotationId);
       toast.success("Quotation submitted", `Reference ${result.quotationId} saved successfully.`);
+      
+      // Store the complete quotation data in sessionStorage so it can be
+      // displayed immediately without a Google Sheets read, avoiding the
+      // cross-instance propagation delay issue.
+      if (result.quotation) {
+        sessionStorage.setItem(`new-quotation-${result.quotationId}`, JSON.stringify(result.quotation));
+        // Auto-expire after 5 minutes
+        setTimeout(() => {
+          sessionStorage.removeItem(`new-quotation-${result.quotationId}`);
+        }, 5 * 60 * 1000);
+      }
+      
       resetForm();
-      return { success: true, quotationId: result.quotationId };
+      return { success: true, quotationId: result.quotationId, quotation: result.quotation };
     } catch (error) {
       toast.error("Network error", "Couldn't reach the server. Check your connection and retry.");
       return { success: false };
