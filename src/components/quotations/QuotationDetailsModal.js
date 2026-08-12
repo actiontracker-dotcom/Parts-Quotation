@@ -16,23 +16,50 @@ export default function QuotationDetailsModal({ quotationNo, onClose }) {
     setLoading(true);
     setError(null);
 
-    fetch(`/api/quotations/${encodeURIComponent(quotationNo)}`)
-      .then((res) => res.json())
-      .then((json) => {
+    // Retry up to 3 times for HTTP 404 only (Google Sheets read-after-write
+    // propagation delay). All other status codes and network errors are handled
+    // on the first attempt without retrying.
+    const MAX_ATTEMPTS = 3;
+    const RETRY_DELAY_MS = 1000;
+
+    (async () => {
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
         if (cancelled) return;
+
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+          if (cancelled) return;
+        }
+
+        let res, json;
+        try {
+          res = await fetch(`/api/quotations/${encodeURIComponent(quotationNo)}`);
+          json = await res.json();
+        } catch (err) {
+          if (cancelled) return;
+          setError(err.message || "Network error.");
+          setLoading(false);
+          return;
+        }
+
+        if (cancelled) return;
+
         if (json.success) {
           setData(json.data);
-        } else {
-          setError(json.message || "Failed to load quotation.");
+          setLoading(false);
+          return;
         }
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setError(err.message || "Network error.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+
+        // Only retry on 404; any other failure is final.
+        if (res.status !== 404 || attempt === MAX_ATTEMPTS - 1) {
+          setError(json.message || "Failed to load quotation.");
+          setLoading(false);
+          return;
+        }
+
+        // 404 and attempts remain — loop continues after delay.
+      }
+    })();
 
     return () => { cancelled = true; };
   }, [quotationNo]);

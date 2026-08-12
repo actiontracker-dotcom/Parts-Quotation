@@ -1157,6 +1157,34 @@ export async function appendQuotation(quotation, meta) {
   // memory (see loadQuotations below), so the next read always reflects the
   // sheet as it exists after this write.
 
+  // Google Sheets values.append() acknowledges the write before the new row is
+  // guaranteed to be visible to a subsequent values.get() call, especially
+  // across different Vercel serverless instances. Verify that the newly-created
+  // quotation is actually readable before telling the caller that creation is
+  // complete. Retry up to 5 times with a 600 ms gap between attempts.
+  const MAX_VERIFY_ATTEMPTS = 5;
+  const VERIFY_DELAY_MS = 600;
+  let verified = false;
+  for (let attempt = 0; attempt < MAX_VERIFY_ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, VERIFY_DELAY_MS));
+    }
+    const { detailMap } = await loadQuotations();
+    if (detailMap.has(meta.quotationId)) {
+      verified = true;
+      break;
+    }
+  }
+
+  if (!verified) {
+    // The row was written to Google Sheets but could not be confirmed readable
+    // within the verification window. Surface this so the caller can return an
+    // appropriate error instead of falsely reporting successful creation.
+    throw new Error(
+      `Quotation ${meta.quotationId} was written but could not be confirmed readable after ${MAX_VERIFY_ATTEMPTS} attempts. Please try again in a moment.`
+    );
+  }
+
   return { rowsWritten: rows.length };
 }
 
@@ -1433,7 +1461,7 @@ export async function getQuotationByNo(quotationNo) {
   const grandTotal = items.reduce((sum, item) => sum + item.total, 0);
 
   return {
-    quotationNo,
+    quotationNo: normalizedQuotationNo,
     customer: _customer || {},
     quotation: _quotation || {},
     followup: _followup || {},
