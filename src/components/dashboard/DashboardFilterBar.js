@@ -1,0 +1,112 @@
+"use client";
+
+import { Filter, X } from "lucide-react";
+import Select from "@/components/ui/Select";
+import Input from "@/components/ui/Input";
+import { cn } from "@/lib/utils/cn";
+import { ORDER_STATUS_OPTIONS } from "@/lib/constants/quotationOptions";
+
+export const DATE_RANGE_OPTIONS = [
+  { value: "All Time", label: "All Time" },
+  { value: "Today", label: "Today" },
+  { value: "This Week", label: "This Week" },
+  { value: "This Month", label: "This Month" },
+  { value: "This Year", label: "This Year" },
+  { value: "Custom Range", label: "Custom Range" },
+];
+
+const STATUS_OPTIONS = [
+  { value: "All", label: "All Statuses" },
+  ...ORDER_STATUS_OPTIONS,
+  { value: "Open", label: "Open / Pending" },
+];
+
+export default function DashboardFilterBar({
+  filters,
+  onFilterChange,
+  onClearFilters,
+  activeFilterCount = 0,
+  divisionOptions = [],
+}) {
+  const isCustomRange = filters.dateRange === "Custom Range";
+  const rangeInvalid = Boolean(
+    filters.fromDate && filters.toDate && filters.fromDate > filters.toDate
+  );
+
+  const divisions = [
+    { value: "All", label: "All Divisions" },
+    ...divisionOptions.map((d) => ({ value: d, label: d })),
+  ];
+
+  return (
+    <div className="rounded-xl border border-ink-100 bg-white p-4 shadow-card sm:p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-accent-500" />
+          <h3 className="text-sm font-semibold text-ink-900">Filters</h3>
+        </div>
+        <button
+          type="button"
+          onClick={onClearFilters}
+          disabled={activeFilterCount === 0}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors duration-150",
+            activeFilterCount === 0
+              ? "cursor-not-allowed text-ink-300"
+              : "cursor-pointer text-ink-500 hover:bg-ink-50 hover:text-ink-800"
+          )}
+        >
+          <X className="h-3.5 w-3.5" />
+          Clear Filters
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Select
+          label="Date Range"
+          options={DATE_RANGE_OPTIONS}
+          value={filters.dateRange}
+          onChange={(e) => onFilterChange({ dateRange: e.target.value })}
+        />
+        <Select
+          label="Division"
+          options={divisions}
+          value={filters.division}
+          onChange={(e) => onFilterChange({ division: e.target.value })}
+        />
+        <Select
+          label="Order Status"
+          options={STATUS_OPTIONS}
+          value={filters.orderStatus}
+          onChange={(e) => onFilterChange({ orderStatus: e.target.value })}
+        />
+      </div>
+
+      {isCustomRange && (
+        <div className="mt-4">
+          <div className="grid grid-cols-1 gap-3 sm:max-w-md sm:grid-cols-2">
+            <Input
+              type="date"
+              label="From Date"
+              value={filters.fromDate || ""}
+              max={filters.toDate || undefined}
+              onChange={(e) => onFilterChange({ fromDate: e.target.value })}
+            />
+            <Input
+              type="date"
+              label="To Date"
+              value={filters.toDate || ""}
+              min={filters.fromDate || undefined}
+              onChange={(e) => onFilterChange({ toDate: e.target.value })}
+            />
+          </div>
+          {rangeInvalid && (
+            <p className="mt-2 text-xs font-medium text-danger-500">
+              From Date cannot be later than To Date. The date filter has not been applied.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

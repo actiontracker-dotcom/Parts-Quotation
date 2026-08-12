@@ -4,6 +4,7 @@ import {
   updateQuotationNextFollowup,
   updateQuotationOrderStatus,
 } from "@/lib/services/googleSheetsService";
+import { getSessionUser, unauthorizedResponse } from "@/lib/auth/session";
 
 // POST /api/quotations/[quotationNo]/followup
 //
@@ -83,6 +84,9 @@ function validateOrderStatus(body) {
 }
 
 export async function POST(request, { params }) {
+  const user = await getSessionUser();
+  if (!user) return unauthorizedResponse();
+
   const { quotationNo } = params;
   const normalizedQuotationNo = normalizeQuotationNo(quotationNo);
 

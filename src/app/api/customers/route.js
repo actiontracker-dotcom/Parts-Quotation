@@ -4,6 +4,7 @@ import {
   searchCustomers,
   createCustomer,
 } from "@/lib/services/googleSheetsService";
+import { getSessionUser, unauthorizedResponse } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,9 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const user = await getSessionUser();
+  if (!user) return unauthorizedResponse();
+
   let body;
   try {
     body = await request.json();

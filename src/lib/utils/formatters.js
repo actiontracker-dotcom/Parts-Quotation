@@ -39,6 +39,24 @@ export function formatCurrency(value) {
   return INR_FORMATTER.format(number);
 }
 
+function trimTrailingZeros(value) {
+  const s = String(value);
+  if (!s.includes(".")) return s;
+  return s.replace(/\.?0+$/, "");
+}
+
+// Compact Indian notation for dashboard KPIs/charts: ₹1.25 Cr, ₹14.25 L, ₹7.5 K.
+// Uses Indian numbering (lakh/crore) which plain latin abbreviations miss.
+export function formatCompactCurrency(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "₹0";
+  const abs = Math.abs(number);
+  if (abs >= 10000000) return `₹${trimTrailingZeros((number / 10000000).toFixed(2))} Cr`;
+  if (abs >= 100000) return `₹${trimTrailingZeros((number / 100000).toFixed(2))} L`;
+  if (abs >= 1000) return `₹${trimTrailingZeros((number / 1000).toFixed(1))} K`;
+  return `₹${trimTrailingZeros(INR_FORMATTER.format(number))}`;
+}
+
 export function toNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;

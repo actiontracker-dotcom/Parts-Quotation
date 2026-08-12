@@ -1249,7 +1249,11 @@ export async function updateQuotationByNo(quotationNo, quotation) {
 // sheet. TTL = 0; the only possible staleness is the (near-instant) propagation of
 // the sheet write itself. Cost is one full range read per call — acceptable for
 // a small quotation sheet and required for correctness.
-async function loadQuotations() {
+//
+// Exported (additive, read-only) so the dashboard aggregation route can read the
+// same single source of truth plus the detail map (for Source Of Enquiry) without
+// performing a second Google Sheets read.
+export async function loadQuotations() {
   const rows = await readSheetRange(DATA_SHEET_TAB, null);
 
   if (!rows || rows.length < 2) {

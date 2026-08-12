@@ -4,6 +4,7 @@ import {
   updateCustomerByRowIndex,
   deleteCustomerByRowIndex,
 } from "@/lib/services/googleSheetsService";
+import { getSessionUser, unauthorizedResponse } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,9 @@ export async function GET(request, { params }) {
 }
 
 export async function PUT(request, { params }) {
+  const user = await getSessionUser();
+  if (!user) return unauthorizedResponse();
+
   let body;
   try {
     body = await request.json();
@@ -107,6 +111,9 @@ export async function PUT(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
+  const user = await getSessionUser();
+  if (!user) return unauthorizedResponse();
+
   try {
     const index = parseRowId(params.id);
     if (index === null || index < 0) {

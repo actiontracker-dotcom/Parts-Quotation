@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { validateQuotation } from "@/lib/validation/quotationSchema";
 import { appendQuotation, getQuotations, generateNextQuotationNumber } from "@/lib/services/googleSheetsService";
+import { getSessionUser, unauthorizedResponse } from "@/lib/auth/session";
 
 // This route handles both listing and creating quotations.
 // The frontend always calls this endpoint; it never touches the sheet directly.
@@ -28,6 +29,9 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  const user = await getSessionUser();
+  if (!user) return unauthorizedResponse();
+
   let body;
   try {
     body = await request.json();

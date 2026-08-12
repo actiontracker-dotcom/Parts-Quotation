@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getQuotationByNo, updateQuotationByNo } from "@/lib/services/googleSheetsService";
 import { validateQuotation } from "@/lib/validation/quotationSchema";
+import { getSessionUser, unauthorizedResponse } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,9 @@ export async function GET(request, { params }) {
 // Update an existing quotation. The quotation number from the URL is the unique
 // identifier — it is never changed and no new quotation number is generated.
 export async function PUT(request, { params }) {
+  const user = await getSessionUser();
+  if (!user) return unauthorizedResponse();
+
   const { quotationNo } = params;
 
   if (!quotationNo) {

@@ -1,17 +1,33 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import { FileText, X } from "lucide-react";
+import { FileText, X, LayoutDashboard, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 const NAV_ITEMS = [
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Quotations", href: "/quotations", icon: FileText },
 ];
 
 export default function Sidebar({ open, onClose }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = useCallback(async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Logout still proceeds client-side even if the network call fails.
+    }
+    router.push("/login");
+    router.refresh();
+  }, [loggingOut, router]);
 
   return (
     <>
@@ -75,6 +91,18 @@ export default function Sidebar({ open, onClose }) {
             );
           })}
         </nav>
+
+        <div className="mt-auto px-3 py-3">
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink-200 transition-colors hover:bg-ink-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </button>
+        </div>
       </aside>
     </>
   );
