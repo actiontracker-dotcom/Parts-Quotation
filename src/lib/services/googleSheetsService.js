@@ -637,6 +637,7 @@ export async function searchParts(query) {
   if (!query || !query.trim()) return [];
   const q = query.trim();
   const qLower = q.toLowerCase();
+  const qNormalized = qLower.replace(/\s+/g, "");
   await ensurePartsLoaded();
 
   const start = Date.now();
@@ -644,7 +645,9 @@ export async function searchParts(query) {
   const results = [];
 
   for (const p of partsCache) {
-    if (p.partNo && p.partNo.toLowerCase().startsWith(qLower)) {
+    const partNoLower = (p.partNo || "").toLowerCase();
+    const partNoNormalized = partNoLower.replace(/\s+/g, "");
+    if (partNoNormalized.startsWith(qNormalized)) {
       results.push(p);
       if (results.length >= MAX_SEARCH_RESULTS) break;
     }
