@@ -46,15 +46,26 @@ export default function QuotationForm({ mode = "create", quotationNo = null }) {
 
     // Check sessionStorage first for newly created quotations to avoid
     // Google Sheets read-after-write propagation delay issues.
+    // Only use cached data if it was created within the last 5 minutes.
     const sessionKey = `new-quotation-${quotationNo}`;
     const cachedQuotation = sessionStorage.getItem(sessionKey);
     
     if (cachedQuotation) {
       try {
         const parsed = JSON.parse(cachedQuotation);
-        loadQuotation(parsed, quotationNo);
-        setLoadingEdit(false);
-        return;
+        const cachedAt = parsed._cachedAt;
+        const now = Date.now();
+        const CACHE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
+        
+        if (cachedAt && (now - cachedAt) < CACHE_MAX_AGE_MS) {
+          // Cache is fresh, use it
+          loadQuotation(parsed, quotationNo);
+          setLoadingEdit(false);
+          return;
+        } else {
+          // Cache is stale, remove it and fall through to API
+          sessionStorage.removeItem(sessionKey);
+        }
       } catch (err) {
         // If parsing fails, fall through to API call
         console.error("Failed to parse cached quotation:", err);

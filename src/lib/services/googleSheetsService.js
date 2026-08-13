@@ -1217,19 +1217,6 @@ export async function appendQuotation(quotation, meta) {
 //   item rows remain for the quotation.
 // Unrelated rows are never touched, and no new quotation number is generated.
 export async function updateQuotationByNo(quotationNo, quotation) {
-  const timestamp = new Date().toISOString();
-  
-  // DIAGNOSTIC LOGGING
-  console.log("[updateQuotationByNo] DIAGNOSTIC - START:", {
-    timestamp,
-    quotationNo,
-    inputQuotationSample: {
-      customerName: quotation.customer?.customerName,
-      quotationDate: quotation.quotation?.quotationDate,
-      itemCount: quotation.items?.length,
-    },
-  });
-
   const rows = await readSheetRange(DATA_SHEET_TAB, null);
 
   if (!rows || rows.length < 2) return { success: false, reason: "empty" };
@@ -1243,20 +1230,7 @@ export async function updateQuotationByNo(quotationNo, quotation) {
     }
   }
 
-  // DIAGNOSTIC LOGGING
-  console.log("[updateQuotationByNo] DIAGNOSTIC - ROW LOOKUP:", {
-    timestamp,
-    quotationNo,
-    totalRows: rows.length,
-    targetRowIndices,
-    targetSheetRows: targetRowIndices.map(i => i + 1),
-  });
-
   if (targetRowIndices.length === 0) {
-    console.log("[updateQuotationByNo] DIAGNOSTIC - NOT FOUND:", {
-      timestamp,
-      quotationNo,
-    });
     return { success: false, reason: "not-found" };
   }
 
@@ -1270,17 +1244,6 @@ export async function updateQuotationByNo(quotationNo, quotation) {
   let rowsAppended = 0;
   let rowsCleared = 0;
 
-  // DIAGNOSTIC LOGGING
-  console.log("[updateQuotationByNo] DIAGNOSTIC - BEFORE WRITE:", {
-    timestamp,
-    quotationNo,
-    newRowsCount: newRows.length,
-    sheetRowsCount: sheetRows.length,
-    writeCols,
-    writeCol,
-    firstNewRowSample: newRows[0] ? newRows[0].slice(0, 5) : null,
-  });
-
   for (let k = 0; k < Math.min(newRows.length, sheetRows.length); k++) {
     // Preserve every existing cell we do not own (e.g. "Record #" at index 0,
     // section-banner columns, Status, follow-up/order/invoice data) before
@@ -1293,18 +1256,7 @@ export async function updateQuotationByNo(quotationNo, quotation) {
     for (let c = 0; c < newRows[k].length; c++) {
       if (newRows[k][c] !== "") merged[c] = newRows[k][c];
     }
-    
-    // DIAGNOSTIC: Log the range and data being written
-    const range = `A${sheetRows[k]}:${writeCol}${sheetRows[k]}`;
-    console.log("[updateQuotationByNo] DIAGNOSTIC - WRITING ROW:", {
-      timestamp,
-      quotationNo,
-      rowIndex: sheetRows[k],
-      range,
-      mergedSample: merged.slice(0, 5),
-    });
-    
-    await updateSheetRow(DATA_SHEET_TAB, range, [merged]);
+    await updateSheetRow(DATA_SHEET_TAB, `A${sheetRows[k]}:${writeCol}${sheetRows[k]}`, [merged]);
     rowsWritten += 1;
   }
 
@@ -1319,15 +1271,6 @@ export async function updateQuotationByNo(quotationNo, quotation) {
       rowsCleared += 1;
     }
   }
-
-  // DIAGNOSTIC LOGGING
-  console.log("[updateQuotationByNo] DIAGNOSTIC - COMPLETE:", {
-    timestamp,
-    quotationNo,
-    rowsWritten,
-    rowsAppended,
-    rowsCleared,
-  });
 
   return { success: true, quotationNo, rowsWritten, rowsAppended, rowsCleared };
 }
@@ -1354,18 +1297,7 @@ export async function updateQuotationByNo(quotationNo, quotation) {
 // same single source of truth plus the detail map (for Source Of Enquiry) without
 // performing a second Google Sheets read.
 export async function loadQuotations() {
-  const startTime = Date.now();
   const rows = await readSheetRange(DATA_SHEET_TAB, null);
-  const loadTime = Date.now() - startTime;
-
-  // DIAGNOSTIC LOGGING
-  const timestamp = new Date().toISOString();
-  console.log("[loadQuotations] DIAGNOSTIC:", {
-    timestamp,
-    loadTimeMs: loadTime,
-    rowsCount: rows ? rows.length : 0,
-    dataSheetTab: DATA_SHEET_TAB,
-  });
 
   if (!rows || rows.length < 2) {
     return { quotations: [], detailMap: new Map() };
@@ -1540,45 +1472,8 @@ export async function getQuotationByNo(quotationNo) {
   // Trim to match the detailMap key construction (getCellValue trims sheet values)
   normalizedQuotationNo = normalizedQuotationNo.trim();
 
-  // DIAGNOSTIC LOGGING
-  const timestamp = new Date().toISOString();
-  console.log("[getQuotationByNo] DIAGNOSTIC:", {
-    timestamp,
-    inputQuotationNo: quotationNo,
-    inputQuotationNoStringified: JSON.stringify(quotationNo),
-    normalizedQuotationNo,
-    normalizedQuotationNoStringified: JSON.stringify(normalizedQuotationNo),
-    detailMapExists: !!detailMap,
-    detailMapSize: detailMap ? detailMap.size : 0,
-    detailMapHasNormalized: detailMap ? detailMap.has(normalizedQuotationNo) : false,
-  });
-
-  // If not found, log all keys containing "Q000016" for debugging
-  if (detailMap && !detailMap.has(normalizedQuotationNo)) {
-    const matchingKeys = [];
-    detailMap.forEach((value, key) => {
-      if (key.includes("Q000016")) {
-        matchingKeys.push(key);
-      }
-    });
-    console.log("[getQuotationByNo] DIAGNOSTIC - NOT FOUND, matching keys:", {
-      timestamp,
-      normalizedQuotationNo,
-      matchingKeys,
-      totalKeys: detailMap.size,
-    });
-  }
-
   const items = detailMap ? detailMap.get(normalizedQuotationNo) : null;
-  if (!items || items.length === 0) {
-    console.log("[getQuotationByNo] DIAGNOSTIC - RETURNING NULL:", {
-      timestamp,
-      normalizedQuotationNo,
-      itemsIsNull: items === null,
-      itemsLength: items ? items.length : 0,
-    });
-    return null;
-  }
+  if (!items || items.length === 0) return null;
 
   const { _customer, _quotation, _followup } = items[0];
   const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);

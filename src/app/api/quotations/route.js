@@ -18,27 +18,7 @@ const NO_STORE_HEADERS = { "Cache-Control": "no-store, max-age=0, must-revalidat
 
 export async function GET() {
   try {
-    const startTime = Date.now();
     const quotations = await getQuotations();
-    const loadTime = Date.now() - startTime;
-    
-    // DIAGNOSTIC LOGGING
-    const timestamp = new Date().toISOString();
-    const q000016 = quotations.find(q => q.quotationNo === "DEEP/M-SPR/26-27/Q000016");
-    console.log("[quotations/GET] DIAGNOSTIC:", {
-      timestamp,
-      loadTimeMs: loadTime,
-      totalQuotationCount: quotations.length,
-      q000016Exists: !!q000016,
-      q000016Data: q000016 ? {
-        quotationNo: q000016.quotationNo,
-        customerName: q000016.customerName,
-        itemCount: q000016.itemCount
-      } : null,
-      first5QuotationNos: quotations.slice(0, 5).map(q => q.quotationNo),
-      last5QuotationNos: quotations.slice(-5).map(q => q.quotationNo),
-    });
-    
     return NextResponse.json({ success: true, data: quotations }, { headers: NO_STORE_HEADERS });
   } catch (error) {
     console.error("[quotations/GET] Error:", error.message);
