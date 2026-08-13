@@ -63,7 +63,7 @@ export default function TotalsSection({ items, customer }) {
           )}
           <View style={styles.grandTotalRow}>
             <Text style={styles.grandTotalLabel}>TOTAL VALUE</Text>
-            <Text style={styles.grandTotalValue}>{formatCurrency(totalWithTax)}</Text>
+            <Text style={styles.grandTotalValue}>{formatCurrency(Math.round(totalWithTax))}</Text>
           </View>
         </View>
       </View>
