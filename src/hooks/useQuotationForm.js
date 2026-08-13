@@ -177,12 +177,41 @@ export function useQuotationForm({ mode = "create", quotationNo = null } = {}) {
 
     setSubmitting(true);
     try {
+      // DIAGNOSTIC LOGGING - EDIT DEBUG
+      if (isEdit) {
+        console.log("[EDIT DEBUG] quotationNo:", editingQuotationNo);
+        console.log("[EDIT DEBUG] PUT URL:", url);
+        console.log("[EDIT DEBUG] PUT payload:", {
+          customerName: payload.customer?.customerName,
+          quotationDate: payload.quotation?.quotationDate,
+          itemCount: payload.items?.length,
+          items: payload.items?.map(item => ({
+            partNo: item.partNo,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+          })),
+        });
+      }
+
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const result = await response.json();
+
+      // DIAGNOSTIC LOGGING - EDIT DEBUG RESPONSE
+      if (isEdit) {
+        console.log("[EDIT DEBUG] PUT response:", {
+          status: response.status,
+          ok: response.ok,
+          success: result.success,
+          message: result.message,
+          rowsWritten: result.rowsWritten,
+          rowsAppended: result.rowsAppended,
+          rowsCleared: result.rowsCleared,
+        });
+      }
 
       if (!response.ok || !result.success) {
         if (result.errors && Object.keys(result.errors).length) {
@@ -198,6 +227,7 @@ export function useQuotationForm({ mode = "create", quotationNo = null } = {}) {
       if (isEdit) {
         // Clear sessionStorage for edited quotation to force fresh read
         const sessionKey = `new-quotation-${editingQuotationNo}`;
+        console.log("[EDIT DEBUG] Clearing sessionStorage key:", sessionKey);
         sessionStorage.removeItem(sessionKey);
 
         toast.success("Quotation updated", `Reference ${editingQuotationNo} updated successfully.`);

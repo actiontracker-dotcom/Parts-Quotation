@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getQuotationByNo, updateQuotationByNo } from "@/lib/services/googleSheetsService";
 import { validateQuotation } from "@/lib/validation/quotationSchema";
 import { getSessionUser, unauthorizedResponse } from "@/lib/auth/session";
+import { getQuotations } from "@/lib/services/googleSheetsService";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,20 @@ export async function GET(request, { params }) {
       normalizedQuotationNo = quotationNo;
     }
 
+    // DIAGNOSTIC LOGGING - GET DEBUG
+    console.log("[GET DEBUG] quotationNo:", quotationNo);
+    console.log("[GET DEBUG] normalized quotationNo:", normalizedQuotationNo);
+
     const quotation = await getQuotationByNo(normalizedQuotationNo);
+
+    // DIAGNOSTIC LOGGING - GET DEBUG RESULT
+    console.log("[GET DEBUG] quotation found:", !!quotation);
+    console.log("[GET DEBUG] item count:", quotation?.items?.length);
+    console.log("[GET DEBUG] items:", quotation?.items?.map(item => ({
+      partNo: item.partNo,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+    })));
 
     if (!quotation) {
       return NextResponse.json(
@@ -82,6 +96,17 @@ export async function PUT(request, { params }) {
     );
   }
 
+  // DIAGNOSTIC LOGGING - PUT DEBUG
+  console.log("[PUT DEBUG] raw quotationNo:", quotationNo);
+  console.log("[PUT DEBUG] decoded quotationNo:", normalizedQuotationNo);
+  console.log("[PUT DEBUG] payload quotationNo:", body.quotation?.quotationNo);
+  console.log("[PUT DEBUG] payload items count:", body.items?.length);
+  console.log("[PUT DEBUG] payload items:", body.items?.map(item => ({
+    partNo: item.partNo,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+  })));
+
   const { success, errors } = validateQuotation(body);
 
   if (!success) {
@@ -93,6 +118,15 @@ export async function PUT(request, { params }) {
 
   try {
     const result = await updateQuotationByNo(normalizedQuotationNo, body);
+
+    // DIAGNOSTIC LOGGING - PUT DEBUG RESULT
+    console.log("[PUT DEBUG] update result:", {
+      success: result.success,
+      reason: result.reason,
+      rowsWritten: result.rowsWritten,
+      rowsAppended: result.rowsAppended,
+      rowsCleared: result.rowsCleared,
+    });
 
     if (!result.success) {
       const status = result.reason === "not-found" ? 404 : 400;
@@ -107,6 +141,21 @@ export async function PUT(request, { params }) {
         { status }
       );
     }
+
+    // DIAGNOSTIC: Immediate read-back verification
+    const readBack = await getQuotationByNo(normalizedQuotationNo);
+    console.log("[VERIFY DEBUG] expected item count:", body.items?.length);
+    console.log("[VERIFY DEBUG] actual item count:", readBack?.items?.length);
+    console.log("[VERIFY DEBUG] expected items:", body.items?.map(item => ({
+      partNo: item.partNo,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+    })));
+    console.log("[VERIFY DEBUG] actual items:", readBack?.items?.map(item => ({
+      partNo: item.partNo,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+    })));
 
     return NextResponse.json(
       {

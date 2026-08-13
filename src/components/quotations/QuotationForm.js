@@ -50,20 +50,29 @@ export default function QuotationForm({ mode = "create", quotationNo = null }) {
     const sessionKey = `new-quotation-${quotationNo}`;
     const cachedQuotation = sessionStorage.getItem(sessionKey);
     
+    // DIAGNOSTIC LOGGING - CACHE DEBUG
+    console.log("[CACHE DEBUG] key:", sessionKey);
+    console.log("[CACHE DEBUG] exists:", !!cachedQuotation);
     if (cachedQuotation) {
       try {
         const parsed = JSON.parse(cachedQuotation);
         const cachedAt = parsed._cachedAt;
         const now = Date.now();
         const CACHE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
+        console.log("[CACHE DEBUG] cachedAt:", cachedAt);
+        console.log("[CACHE DEBUG] now:", now);
+        console.log("[CACHE DEBUG] age:", now - cachedAt);
+        console.log("[CACHE DEBUG] is fresh:", cachedAt && (now - cachedAt) < CACHE_MAX_AGE_MS);
         
         if (cachedAt && (now - cachedAt) < CACHE_MAX_AGE_MS) {
           // Cache is fresh, use it
+          console.log("[CACHE DEBUG] cache source used: YES");
           loadQuotation(parsed, quotationNo);
           setLoadingEdit(false);
           return;
         } else {
           // Cache is stale, remove it and fall through to API
+          console.log("[CACHE DEBUG] cache is stale, removing and using API");
           sessionStorage.removeItem(sessionKey);
         }
       } catch (err) {
@@ -71,6 +80,8 @@ export default function QuotationForm({ mode = "create", quotationNo = null }) {
         console.error("Failed to parse cached quotation:", err);
         sessionStorage.removeItem(sessionKey);
       }
+    } else {
+      console.log("[CACHE DEBUG] cache source used: NO (no cache)");
     }
 
     fetch(`/api/quotations/${encodeURIComponent(quotationNo)}`)

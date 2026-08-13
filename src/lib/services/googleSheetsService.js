@@ -1217,6 +1217,16 @@ export async function appendQuotation(quotation, meta) {
 //   item rows remain for the quotation.
 // Unrelated rows are never touched, and no new quotation number is generated.
 export async function updateQuotationByNo(quotationNo, quotation) {
+  // DIAGNOSTIC LOGGING - UPDATE DEBUG
+  console.log("[UPDATE DEBUG] quotationNo:", quotationNo);
+  console.log("[UPDATE DEBUG] normalizedQuotationNo:", quotationNo);
+  console.log("[UPDATE DEBUG] input item count:", quotation.items?.length);
+  console.log("[UPDATE DEBUG] input items:", quotation.items?.map(item => ({
+    partNo: item.partNo,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+  })));
+
   const rows = await readSheetRange(DATA_SHEET_TAB, null);
 
   if (!rows || rows.length < 2) return { success: false, reason: "empty" };
@@ -1230,7 +1240,13 @@ export async function updateQuotationByNo(quotationNo, quotation) {
     }
   }
 
+  // DIAGNOSTIC LOGGING - UPDATE DEBUG ROW LOOKUP
+  console.log("[UPDATE DEBUG] matching row indices:", targetRowIndices);
+  console.log("[UPDATE DEBUG] existing row count:", targetRowIndices.length);
+  console.log("[UPDATE DEBUG] target sheet rows:", targetRowIndices.map(i => i + 1));
+
   if (targetRowIndices.length === 0) {
+    console.log("[UPDATE DEBUG] quotation not found in sheet");
     return { success: false, reason: "not-found" };
   }
 
@@ -1244,6 +1260,11 @@ export async function updateQuotationByNo(quotationNo, quotation) {
   let rowsAppended = 0;
   let rowsCleared = 0;
 
+  // DIAGNOSTIC LOGGING - UPDATE DEBUG WRITE PREPARATION
+  console.log("[UPDATE DEBUG] new item rows count:", newRows.length);
+  console.log("[UPDATE DEBUG] rows to overwrite:", Math.min(newRows.length, sheetRows.length));
+  console.log("[UPDATE DEBUG] rows to clear:", newRows.length < sheetRows.length ? sheetRows.length - newRows.length : 0);
+
   for (let k = 0; k < Math.min(newRows.length, sheetRows.length); k++) {
     // Preserve every existing cell we do not own (e.g. "Record #" at index 0,
     // section-banner columns, Status, follow-up/order/invoice data) before
@@ -1256,21 +1277,37 @@ export async function updateQuotationByNo(quotationNo, quotation) {
     for (let c = 0; c < newRows[k].length; c++) {
       if (newRows[k][c] !== "") merged[c] = newRows[k][c];
     }
-    await updateSheetRow(DATA_SHEET_TAB, `A${sheetRows[k]}:${writeCol}${sheetRows[k]}`, [merged]);
+    
+    const range = `A${sheetRows[k]}:${writeCol}${sheetRows[k]}`;
+    console.log("[UPDATE DEBUG] writing row:", sheetRows[k], "range:", range);
+    await updateSheetRow(DATA_SHEET_TAB, range, [merged]);
     rowsWritten += 1;
   }
 
   if (newRows.length > sheetRows.length) {
     const extra = newRows.slice(sheetRows.length);
+    console.log("[UPDATE DEBUG] appending", extra.length, "extra rows");
     await appendSheetRows(DATA_SHEET_TAB, extra);
     rowsAppended = extra.length;
   } else if (newRows.length < sheetRows.length) {
     const fullCol = getColumnLetter(rows[0].length - 1);
+    const rowsToClear = [];
     for (let k = newRows.length; k < sheetRows.length; k++) {
-      await clearSheetRange(DATA_SHEET_TAB, `A${sheetRows[k]}:${fullCol}${sheetRows[k]}`);
+      const range = `A${sheetRows[k]}:${fullCol}${sheetRows[k]}`;
+      console.log("[UPDATE DEBUG] clearing row:", sheetRows[k], "range:", range);
+      rowsToClear.push(range);
+      await clearSheetRange(DATA_SHEET_TAB, range);
       rowsCleared += 1;
     }
+    console.log("[UPDATE DEBUG] cleared ranges:", rowsToClear);
   }
+
+  // DIAGNOSTIC LOGGING - UPDATE DEBUG RESULT
+  console.log("[UPDATE DEBUG] final result:", {
+    rowsWritten,
+    rowsAppended,
+    rowsCleared,
+  });
 
   return { success: true, quotationNo, rowsWritten, rowsAppended, rowsCleared };
 }
