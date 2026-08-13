@@ -97,6 +97,9 @@ async function sheetsFetch(path, options = {}) {
       "Content-Type": "application/json",
     },
     agent: AGENT,
+    // Disable Next.js Data Cache for all Google Sheets reads to ensure fresh data
+    // This is critical for quotation CRUD operations where read-after-write consistency is required
+    cache: "no-store",
   });
 
   if (!res.ok) {

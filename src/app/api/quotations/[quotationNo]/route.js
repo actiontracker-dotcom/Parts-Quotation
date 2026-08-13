@@ -3,6 +3,7 @@ import { getQuotationByNo, updateQuotationByNo } from "@/lib/services/googleShee
 import { validateQuotation } from "@/lib/validation/quotationSchema";
 import { getSessionUser, unauthorizedResponse } from "@/lib/auth/session";
 import { getQuotations } from "@/lib/services/googleSheetsService";
+import { computeLineTotal, computeQuotationTotals, toNumber } from "@/lib/utils/formatters";
 
 export const dynamic = "force-dynamic";
 
@@ -109,6 +110,241 @@ export async function PUT(request, { params }) {
       );
     }
 
+    // Perform read-after-write verification to ensure the update was persisted correctly
+    // With cache: "no-store" in googleSheetsClient, this should read fresh data immediately
+    const readBack = await getQuotationByNo(normalizedQuotationNo);
+    
+    if (!readBack) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Quotation was updated but could not be read back for verification.",
+        },
+        { status: 502 }
+      );
+    }
+
+    // Verify customer fields
+    const customerFieldsMatch = 
+      readBack.customer.customerName === (body.customer.customerName || "") &&
+      readBack.customer.contactPerson === (body.customer.contactPerson || "") &&
+      readBack.customer.contactNumber === (body.customer.contactNumber || "") &&
+      readBack.customer.emailTo === (body.customer.emailTo || "") &&
+      readBack.customer.emailCc === (body.customer.emailCc || "") &&
+      readBack.customer.designation === (body.customer.designation || "") &&
+      readBack.customer.fullAddressGst === (body.customer.fullAddressGst || "") &&
+      readBack.customer.location === (body.customer.location || "") &&
+      readBack.customer.userId === (body.customer.userId || "") &&
+      readBack.customer.engineerRemark === (body.customer.engineerRemark || "");
+
+    // Verify quotation fields with detailed diagnostics
+    console.log("[quotations/[quotationNo]/PUT] DIAGNOSTIC - quotation field comparison:");
+    
+    const fieldChecks = [
+      {
+        field: "quotationNo",
+        submittedRaw: body.quotation.quotationNo,
+        readBackRaw: readBack.quotationNo,
+        submittedType: typeof body.quotation.quotationNo,
+        readBackType: typeof readBack.quotationNo,
+        normalizedSubmitted: normalizedQuotationNo,
+        normalizedReadBack: readBack.quotationNo,
+        match: readBack.quotationNo === normalizedQuotationNo
+      },
+      {
+        field: "division",
+        submittedRaw: body.quotation.division,
+        readBackRaw: readBack.quotation.division,
+        submittedType: typeof body.quotation.division,
+        readBackType: typeof readBack.quotation.division,
+        normalizedSubmitted: body.quotation.division || "",
+        normalizedReadBack: readBack.quotation.division,
+        match: readBack.quotation.division === (body.quotation.division || "")
+      },
+      {
+        field: "sourceOfEnquiry",
+        submittedRaw: body.quotation.sourceOfEnquiry,
+        readBackRaw: readBack.quotation.sourceOfEnquiry,
+        submittedType: typeof body.quotation.sourceOfEnquiry,
+        readBackType: typeof readBack.quotation.sourceOfEnquiry,
+        normalizedSubmitted: body.quotation.sourceOfEnquiry || "",
+        normalizedReadBack: readBack.quotation.sourceOfEnquiry,
+        match: readBack.quotation.sourceOfEnquiry === (body.quotation.sourceOfEnquiry || "")
+      },
+      {
+        field: "enquiryGeneratedBy",
+        submittedRaw: body.quotation.enquiryGeneratedBy,
+        readBackRaw: readBack.quotation.enquiryGeneratedBy,
+        submittedType: typeof body.quotation.enquiryGeneratedBy,
+        readBackType: typeof readBack.quotation.enquiryGeneratedBy,
+        normalizedSubmitted: body.quotation.enquiryGeneratedBy || "",
+        normalizedReadBack: readBack.quotation.enquiryGeneratedBy,
+        match: readBack.quotation.enquiryGeneratedBy === (body.quotation.enquiryGeneratedBy || "")
+      },
+      {
+        field: "quotationDate",
+        submittedRaw: body.quotation.quotationDate,
+        readBackRaw: readBack.quotation.quotationDate,
+        submittedType: typeof body.quotation.quotationDate,
+        readBackType: typeof readBack.quotation.quotationDate,
+        normalizedSubmitted: body.quotation.quotationDate || "",
+        normalizedReadBack: readBack.quotation.quotationDate,
+        match: readBack.quotation.quotationDate === (body.quotation.quotationDate || "")
+      },
+      {
+        field: "partyReferenceNumber",
+        submittedRaw: body.quotation.partyReferenceNumber,
+        readBackRaw: readBack.quotation.partyReferenceNumber,
+        submittedType: typeof body.quotation.partyReferenceNumber,
+        readBackType: typeof readBack.quotation.partyReferenceNumber,
+        normalizedSubmitted: body.quotation.partyReferenceNumber || "",
+        normalizedReadBack: readBack.quotation.partyReferenceNumber,
+        match: readBack.quotation.partyReferenceNumber === (body.quotation.partyReferenceNumber || "")
+      },
+      {
+        field: "partyReferenceDate",
+        submittedRaw: body.quotation.partyReferenceDate,
+        readBackRaw: readBack.quotation.partyReferenceDate,
+        submittedType: typeof body.quotation.partyReferenceDate,
+        readBackType: typeof readBack.quotation.partyReferenceDate,
+        normalizedSubmitted: body.quotation.partyReferenceDate || "",
+        normalizedReadBack: readBack.quotation.partyReferenceDate,
+        match: readBack.quotation.partyReferenceDate === (body.quotation.partyReferenceDate || "")
+      },
+      {
+        field: "paymentTerms",
+        submittedRaw: body.quotation.paymentTerms,
+        readBackRaw: readBack.quotation.paymentTerms,
+        submittedType: typeof body.quotation.paymentTerms,
+        readBackType: typeof readBack.quotation.paymentTerms,
+        normalizedSubmitted: body.quotation.paymentTerms || "",
+        normalizedReadBack: readBack.quotation.paymentTerms,
+        match: readBack.quotation.paymentTerms === (body.quotation.paymentTerms || "")
+      },
+      {
+        field: "quotationValidity",
+        submittedRaw: body.quotation.quotationValidity,
+        readBackRaw: readBack.quotation.quotationValidity,
+        submittedType: typeof body.quotation.quotationValidity,
+        readBackType: typeof readBack.quotation.quotationValidity,
+        normalizedSubmitted: body.quotation.quotationValidity || "",
+        normalizedReadBack: readBack.quotation.quotationValidity,
+        match: readBack.quotation.quotationValidity === (body.quotation.quotationValidity || "")
+      },
+      {
+        field: "termsOfDelivery",
+        submittedRaw: body.quotation.termsOfDelivery,
+        readBackRaw: readBack.quotation.termsOfDelivery,
+        submittedType: typeof body.quotation.termsOfDelivery,
+        readBackType: typeof readBack.quotation.termsOfDelivery,
+        normalizedSubmitted: body.quotation.termsOfDelivery || "",
+        normalizedReadBack: readBack.quotation.termsOfDelivery,
+        match: readBack.quotation.termsOfDelivery === (body.quotation.termsOfDelivery || "")
+      },
+      {
+        field: "quotationFollowUpBy",
+        submittedRaw: body.quotation.quotationFollowUpBy,
+        readBackRaw: readBack.quotation.quotationFollowUpBy,
+        submittedType: typeof body.quotation.quotationFollowUpBy,
+        readBackType: typeof readBack.quotation.quotationFollowUpBy,
+        normalizedSubmitted: body.quotation.quotationFollowUpBy || "",
+        normalizedReadBack: readBack.quotation.quotationFollowUpBy,
+        match: readBack.quotation.quotationFollowUpBy === (body.quotation.quotationFollowUpBy || "")
+      }
+    ];
+
+    fieldChecks.forEach(check => {
+      console.log(`FIELD: ${check.field}`);
+      console.log(`  SUBMITTED RAW: ${JSON.stringify(check.submittedRaw)}`);
+      console.log(`  READBACK RAW: ${JSON.stringify(check.readBackRaw)}`);
+      console.log(`  SUBMITTED TYPE: ${check.submittedType}`);
+      console.log(`  READBACK TYPE: ${check.readBackType}`);
+      console.log(`  NORMALIZED SUBMITTED: ${JSON.stringify(check.normalizedSubmitted)}`);
+      console.log(`  NORMALIZED READBACK: ${JSON.stringify(check.normalizedReadBack)}`);
+      console.log(`  MATCH: ${check.match}`);
+    });
+
+    const failingFields = fieldChecks.filter(check => !check.match);
+    if (failingFields.length > 0) {
+      console.log("[quotations/[quotationNo]/PUT] FAILING FIELDS:");
+      failingFields.forEach(check => {
+        console.log(`  - ${check.field}`);
+      });
+    }
+
+    const quotationFieldsMatch = fieldChecks.every(check => check.match);
+
+    // Verify item count
+    const itemCountMatch = readBack.items.length === body.items.length;
+
+    // Verify items
+    let itemsMatch = true;
+    const itemMismatches = [];
+    
+    if (itemCountMatch) {
+      for (let i = 0; i < body.items.length; i++) {
+        const submittedItem = body.items[i];
+        const readBackItem = readBack.items[i];
+        
+        const itemFieldsMatch =
+          readBackItem.partNumber === (submittedItem.partNumber || "") &&
+          readBackItem.description === (submittedItem.partDescription || "") &&
+          readBackItem.availability === (submittedItem.availability || "") &&
+          toNumber(readBackItem.quantity) === toNumber(submittedItem.quantity) &&
+          toNumber(readBackItem.unitPrice) === toNumber(submittedItem.unitPrice) &&
+          toNumber(readBackItem.otherRate) === toNumber(submittedItem.otherRate) &&
+          toNumber(readBackItem.discount) === toNumber(submittedItem.discount) &&
+          readBackItem.uom === (submittedItem.uom || "") &&
+          toNumber(readBackItem.gstRate) === toNumber(submittedItem.gstRate) &&
+          readBackItem.hsnCode === (submittedItem.hsnCode || "");
+        
+        if (!itemFieldsMatch) {
+          itemsMatch = false;
+          itemMismatches.push({ index: i, submitted: submittedItem, readBack: readBackItem });
+        }
+      }
+    }
+
+    // Verify totals using canonical calculation
+    const expectedTotals = computeQuotationTotals(body.items);
+    const totalsMatch =
+      Math.abs(readBack.totals.subtotal - expectedTotals.subtotal) < 0.01 &&
+      Math.abs(readBack.totals.grandTotal - expectedTotals.grandTotal) < 0.01;
+
+    // If verification fails, return error with diagnostic information
+    if (!customerFieldsMatch || !quotationFieldsMatch || !itemCountMatch || !itemsMatch || !totalsMatch) {
+      console.error("[quotations/[quotationNo]/PUT] Verification failed:", {
+        customerFieldsMatch,
+        quotationFieldsMatch,
+        itemCountMatch,
+        itemsMatch,
+        totalsMatch,
+        itemMismatches,
+        submitted: body,
+        readBack
+      });
+      
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Quotation was written but verification failed. The read-back data does not match the submitted data.",
+          verificationDetails: {
+            customerFieldsMatch,
+            quotationFieldsMatch,
+            itemCountMatch,
+            itemsMatch,
+            totalsMatch,
+            submittedItemCount: body.items.length,
+            readBackItemCount: readBack.items.length,
+            submittedGrandTotal: expectedTotals.grandTotal,
+            readBackGrandTotal: readBack.totals.grandTotal,
+          },
+        },
+        { status: 502 }
+      );
+    }
+
+    // Verification successful - return success response
     return NextResponse.json(
       {
         success: true,

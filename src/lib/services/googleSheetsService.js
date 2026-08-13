@@ -1138,7 +1138,9 @@ export async function buildQuotationRows(quotation, { quotationId, createdAt }) 
     };
     for (const [header, value] of Object.entries(fieldMap)) {
       const idx = headers[header];
-      if (idx !== undefined && idx < numCols && value !== undefined && value !== null && value !== "") {
+      // Allow empty strings to be written so users can clear fields
+      // Only skip if the value is undefined or null (never set)
+      if (idx !== undefined && idx < numCols && value !== undefined && value !== null) {
         row[idx] = String(value);
       }
     }
@@ -1206,8 +1208,11 @@ export async function updateQuotationByNo(quotationNo, quotation) {
     for (let c = 0; c < writeCols; c++) {
       if (merged[c] === undefined || merged[c] === null) merged[c] = "";
     }
+    // Overlay new quotation data. Empty strings from buildQuotationRows
+    // intentionally clear fields, so we allow them to overwrite existing values.
+    // This fixes the bug where users couldn't clear editable fields.
     for (let c = 0; c < newRows[k].length; c++) {
-      if (newRows[k][c] !== "") merged[c] = newRows[k][c];
+      merged[c] = newRows[k][c];
     }
     
     const range = `A${sheetRows[k]}:${writeCol}${sheetRows[k]}`;
