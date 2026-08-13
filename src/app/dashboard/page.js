@@ -13,6 +13,7 @@ import {
   Package,
   RefreshCw,
   LayoutDashboard,
+  Filter,
 } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import Card, { CardHeader, CardBody } from "@/components/ui/Card";
@@ -34,6 +35,7 @@ const DEFAULT_FILTERS = {
   dateRange: "All Time",
   division: "All",
   orderStatus: "All",
+  enquiryGeneratedBy: "All",
   fromDate: "",
   toDate: "",
 };
@@ -99,6 +101,7 @@ export default function DashboardPage() {
   const [error, setError] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [me, setMe] = useState(null);
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,6 +130,7 @@ export default function DashboardPage() {
     if (filters.dateRange === "Custom Range" && (filters.fromDate || filters.toDate)) count += 1;
     if (filters.division !== "All") count += 1;
     if (filters.orderStatus !== "All") count += 1;
+    if (filters.enquiryGeneratedBy !== "All") count += 1;
     return count;
   }, [filters]);
 
@@ -141,6 +145,7 @@ export default function DashboardPage() {
     if (to) params.set("to", to);
     if (filters.division !== "All") params.set("division", filters.division);
     if (filters.orderStatus !== "All") params.set("orderStatus", filters.orderStatus);
+    if (filters.enquiryGeneratedBy !== "All") params.set("enquiryGeneratedBy", filters.enquiryGeneratedBy);
     return params.toString();
   }, [filters]);
 
@@ -198,7 +203,7 @@ export default function DashboardPage() {
         tint: "bg-teal-50 text-teal-600",
       },
       {
-        label: "Open / Pending",
+        label: "Pending",
         value: s.openCount,
         sub: `${formatCompactCurrency(s.openAmount)} in pipeline`,
         icon: Clock,
@@ -316,13 +321,17 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="secondary" icon={RefreshCw} onClick={() => setReloadToken((t) => t + 1)}>
-            Refresh
+          <Button 
+            variant="secondary" 
+            icon={Filter} 
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            Filter
           </Button>
         </div>
       </div>
 
-      {!error && !loading && data && (
+      {!error && !loading && data && showFilters && (
         <div className="mt-4 animate-fade-slide-in">
           <DashboardFilterBar
             filters={filters}
@@ -330,6 +339,8 @@ export default function DashboardPage() {
             onClearFilters={handleClearFilters}
             activeFilterCount={activeFilterCount}
             divisionOptions={data.filters ? data.filters.divisions : []}
+            engineerOptions={data.filters ? data.filters.engineers : []}
+            onClose={() => setShowFilters(false)}
           />
         </div>
       )}

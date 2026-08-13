@@ -86,6 +86,7 @@ export async function GET(request) {
     const toParam = searchParams.get("to") || "";
     const divisionFilter = searchParams.get("division") || "";
     const orderStatusFilter = searchParams.get("orderStatus") || "";
+    const enquiryGeneratedByFilter = searchParams.get("enquiryGeneratedBy") || "";
 
     const { quotations, detailMap } = await loadQuotations();
 
@@ -129,6 +130,10 @@ export async function GET(request) {
       list = list.filter((q) => normalizeOrderStatus(q.orderStatus) === orderStatusFilter);
     } else if (orderStatusFilter === OPEN_STATUS) {
       list = list.filter((q) => normalizeOrderStatus(q.orderStatus) === OPEN_STATUS);
+    }
+
+    if (enquiryGeneratedByFilter) {
+      list = list.filter((q) => (q.engineer || "").trim() === enquiryGeneratedByFilter);
     }
 
     // Date range filtering uses inclusive day bounds exactly like the quotations
