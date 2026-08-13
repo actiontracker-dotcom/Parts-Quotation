@@ -85,7 +85,7 @@ export async function PUT(request, { params }) {
   }
 
   // The dynamic route may deliver the quotation number percent-encoded (e.g.
-  // "DEEP%2FM-SPR%2F26-27%2FQ000001" on Vercel). Decode defensively so the
+  // "DEEP%2FM-SPR%2F26-27%2FQ000001"). Decode defensively so the
   // lookup matches the sheet value; fall back to the original value on error.
   let normalizedQuotationNo = quotationNo;
   try {
@@ -104,6 +104,19 @@ export async function PUT(request, { params }) {
     );
   }
 
+  // DIAGNOSTIC LOGGING
+  const timestamp = new Date().toISOString();
+  console.log("[PUT ROUTE] DIAGNOSTIC - BEFORE UPDATE:", {
+    timestamp,
+    rawQuotationNo: quotationNo,
+    normalizedQuotationNo,
+    bodySample: {
+      customerName: body.customer?.customerName,
+      quotationDate: body.quotation?.quotationDate,
+      itemCount: body.items?.length,
+    },
+  });
+
   const { success, errors } = validateQuotation(body);
 
   if (!success) {
@@ -115,6 +128,17 @@ export async function PUT(request, { params }) {
 
   try {
     const result = await updateQuotationByNo(normalizedQuotationNo, body);
+
+    // DIAGNOSTIC LOGGING
+    console.log("[PUT ROUTE] DIAGNOSTIC - AFTER UPDATE:", {
+      timestamp,
+      normalizedQuotationNo,
+      resultSuccess: result.success,
+      resultReason: result.reason,
+      rowsWritten: result.rowsWritten,
+      rowsAppended: result.rowsAppended,
+      rowsCleared: result.rowsCleared,
+    });
 
     if (!result.success) {
       const status = result.reason === "not-found" ? 404 : 400;
@@ -129,6 +153,17 @@ export async function PUT(request, { params }) {
         { status }
       );
     }
+
+    // DIAGNOSTIC: Immediate read-after-write verification
+    const readBack = await getQuotationByNo(normalizedQuotationNo);
+    console.log("[PUT ROUTE] DIAGNOSTIC - READ-BACK VERIFICATION:", {
+      timestamp,
+      normalizedQuotationNo,
+      readBackExists: !!readBack,
+      readBackCustomerName: readBack?.customer?.customerName,
+      readBackQuotationDate: readBack?.quotation?.quotationDate,
+      readBackItemCount: readBack?.items?.length,
+    });
 
     return NextResponse.json(
       {

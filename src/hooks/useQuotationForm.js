@@ -177,12 +177,37 @@ export function useQuotationForm({ mode = "create", quotationNo = null } = {}) {
 
     setSubmitting(true);
     try {
+      // DIAGNOSTIC LOGGING
+      const timestamp = new Date().toISOString();
+      console.log("[EDIT SAVE] DIAGNOSTIC - BEFORE PUT:", {
+        timestamp,
+        quotationNo: isEdit ? editingQuotationNo : null,
+        method,
+        url,
+        payloadSample: isEdit ? {
+          customerName: payload.customer?.customerName,
+          quotationDate: payload.quotation?.quotationDate,
+          itemCount: payload.items?.length,
+        } : null,
+      });
+
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const result = await response.json();
+
+      // DIAGNOSTIC LOGGING
+      console.log("[EDIT SAVE] DIAGNOSTIC - AFTER PUT:", {
+        timestamp,
+        quotationNo: isEdit ? editingQuotationNo : null,
+        status: response.status,
+        ok: response.ok,
+        resultSuccess: result.success,
+        resultMessage: result.message,
+        resultData: result,
+      });
 
       if (!response.ok || !result.success) {
         if (result.errors && Object.keys(result.errors).length) {
@@ -196,6 +221,25 @@ export function useQuotationForm({ mode = "create", quotationNo = null } = {}) {
       }
 
       if (isEdit) {
+        // DIAGNOSTIC: Check if sessionStorage has stale data for this quotation
+        const sessionKey = `new-quotation-${editingQuotationNo}`;
+        const sessionData = sessionStorage.getItem(sessionKey);
+        console.log("[EDIT SAVE] DIAGNOSTIC - SESSION STORAGE CHECK:", {
+          timestamp,
+          quotationNo: editingQuotationNo,
+          sessionKey,
+          hasSessionData: !!sessionData,
+        });
+        
+        // Clear sessionStorage for edited quotation to force fresh read
+        if (sessionData) {
+          sessionStorage.removeItem(sessionKey);
+          console.log("[EDIT SAVE] DIAGNOSTIC - CLEARED SESSION STORAGE:", {
+            timestamp,
+            quotationNo: editingQuotationNo,
+          });
+        }
+
         toast.success("Quotation updated", `Reference ${editingQuotationNo} updated successfully.`);
         return { success: true, quotationId: editingQuotationNo };
       }
