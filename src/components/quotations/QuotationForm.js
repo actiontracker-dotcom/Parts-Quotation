@@ -44,6 +44,24 @@ export default function QuotationForm({ mode = "create", quotationNo = null }) {
     setLoadingEdit(true);
     setEditLoadError(null);
 
+    // Check sessionStorage first for newly created quotations to avoid
+    // Google Sheets read-after-write propagation delay issues.
+    const sessionKey = `new-quotation-${quotationNo}`;
+    const cachedQuotation = sessionStorage.getItem(sessionKey);
+    
+    if (cachedQuotation) {
+      try {
+        const parsed = JSON.parse(cachedQuotation);
+        loadQuotation(parsed, quotationNo);
+        setLoadingEdit(false);
+        return;
+      } catch (err) {
+        // If parsing fails, fall through to API call
+        console.error("Failed to parse cached quotation:", err);
+        sessionStorage.removeItem(sessionKey);
+      }
+    }
+
     fetch(`/api/quotations/${encodeURIComponent(quotationNo)}`)
       .then((res) => res.json())
       .then((json) => {

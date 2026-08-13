@@ -1297,7 +1297,18 @@ export async function updateQuotationByNo(quotationNo, quotation) {
 // same single source of truth plus the detail map (for Source Of Enquiry) without
 // performing a second Google Sheets read.
 export async function loadQuotations() {
+  const startTime = Date.now();
   const rows = await readSheetRange(DATA_SHEET_TAB, null);
+  const loadTime = Date.now() - startTime;
+
+  // DIAGNOSTIC LOGGING
+  const timestamp = new Date().toISOString();
+  console.log("[loadQuotations] DIAGNOSTIC:", {
+    timestamp,
+    loadTimeMs: loadTime,
+    rowsCount: rows ? rows.length : 0,
+    dataSheetTab: DATA_SHEET_TAB,
+  });
 
   if (!rows || rows.length < 2) {
     return { quotations: [], detailMap: new Map() };
@@ -1472,8 +1483,45 @@ export async function getQuotationByNo(quotationNo) {
   // Trim to match the detailMap key construction (getCellValue trims sheet values)
   normalizedQuotationNo = normalizedQuotationNo.trim();
 
+  // DIAGNOSTIC LOGGING
+  const timestamp = new Date().toISOString();
+  console.log("[getQuotationByNo] DIAGNOSTIC:", {
+    timestamp,
+    inputQuotationNo: quotationNo,
+    inputQuotationNoStringified: JSON.stringify(quotationNo),
+    normalizedQuotationNo,
+    normalizedQuotationNoStringified: JSON.stringify(normalizedQuotationNo),
+    detailMapExists: !!detailMap,
+    detailMapSize: detailMap ? detailMap.size : 0,
+    detailMapHasNormalized: detailMap ? detailMap.has(normalizedQuotationNo) : false,
+  });
+
+  // If not found, log all keys containing "Q000016" for debugging
+  if (detailMap && !detailMap.has(normalizedQuotationNo)) {
+    const matchingKeys = [];
+    detailMap.forEach((value, key) => {
+      if (key.includes("Q000016")) {
+        matchingKeys.push(key);
+      }
+    });
+    console.log("[getQuotationByNo] DIAGNOSTIC - NOT FOUND, matching keys:", {
+      timestamp,
+      normalizedQuotationNo,
+      matchingKeys,
+      totalKeys: detailMap.size,
+    });
+  }
+
   const items = detailMap ? detailMap.get(normalizedQuotationNo) : null;
-  if (!items || items.length === 0) return null;
+  if (!items || items.length === 0) {
+    console.log("[getQuotationByNo] DIAGNOSTIC - RETURNING NULL:", {
+      timestamp,
+      normalizedQuotationNo,
+      itemsIsNull: items === null,
+      itemsLength: items ? items.length : 0,
+    });
+    return null;
+  }
 
   const { _customer, _quotation, _followup } = items[0];
   const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);

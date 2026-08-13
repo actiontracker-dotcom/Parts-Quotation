@@ -28,14 +28,36 @@ export async function GET(request, { params }) {
       normalizedQuotationNo = quotationNo;
     }
 
+    // DIAGNOSTIC LOGGING
+    const timestamp = new Date().toISOString();
+    console.log("[quotations/[quotationNo]/GET] DIAGNOSTIC - BEFORE API CALL:", {
+      timestamp,
+      rawParamsQuotationNo: quotationNo,
+      rawParamsQuotationNoStringified: JSON.stringify(quotationNo),
+      decodedQuotationNo: normalizedQuotationNo,
+      decodedQuotationNoStringified: JSON.stringify(normalizedQuotationNo),
+    });
+
     const quotation = await getQuotationByNo(normalizedQuotationNo);
 
     if (!quotation) {
+      console.log("[quotations/[quotationNo]/GET] DIAGNOSTIC - NOT FOUND:", {
+        timestamp,
+        rawParamsQuotationNo: quotationNo,
+        normalizedQuotationNo,
+      });
       return NextResponse.json(
         { success: false, message: "Quotation not found." },
         { status: 404 }
       );
     }
+
+    console.log("[quotations/[quotationNo]/GET] DIAGNOSTIC - FOUND:", {
+      timestamp,
+      rawParamsQuotationNo: quotationNo,
+      normalizedQuotationNo,
+      returnedQuotationNo: quotation.quotationNo,
+    });
 
     return NextResponse.json({ success: true, data: quotation }, { headers: NO_STORE_HEADERS });
   } catch (error) {
