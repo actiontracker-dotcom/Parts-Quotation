@@ -1153,53 +1153,6 @@ export async function appendQuotation(quotation, meta) {
   await appendSheetRows(DATA_SHEET_TAB, rows);
   console.timeEnd("sheets-append-quotation");
 
-  // No cache invalidation is needed: the quotation list is never cached in
-  // memory (see loadQuotations below), so the next read always reflects the
-  // sheet as it exists after this write.
-
-  // Google Sheets values.append() acknowledges the write before the new row is
-  // guaranteed to be visible to *other* HTTP connections / Vercel serverless
-  // instances (eventual consistency across read replicas).
-  //
-  // IMPORTANT: reading back from the SAME Lambda invocation that performed the
-  // write always succeeds immediately (strong read-after-write consistency
-  // within the same API session), so a same-instance verification loop gives
-  // false confidence — it passes instantly while OTHER instances are still
-  // serving stale state.
-  //
-  // Fix: wait 2 seconds unconditionally BEFORE verifying. This gives Google
-  // Sheets time to propagate the write across all read replicas so that any
-  // subsequent Lambda invocation (handling the client's detail GET) will see
-  // the new row. Then verify up to 3 times (1-second gap each) in case
-  // propagation takes slightly longer under load.
-  const PROPAGATION_WAIT_MS = 2000;
-  const MAX_VERIFY_ATTEMPTS = 3;
-  const VERIFY_DELAY_MS = 1000;
-
-  // Unconditional propagation window — ensures cross-instance visibility.
-  await new Promise((resolve) => setTimeout(resolve, PROPAGATION_WAIT_MS));
-
-  let verified = false;
-  for (let attempt = 0; attempt < MAX_VERIFY_ATTEMPTS; attempt++) {
-    if (attempt > 0) {
-      await new Promise((resolve) => setTimeout(resolve, VERIFY_DELAY_MS));
-    }
-    const { detailMap } = await loadQuotations();
-    if (detailMap.has(meta.quotationId)) {
-      verified = true;
-      break;
-    }
-  }
-
-  if (!verified) {
-    // The row was written to Google Sheets but could not be confirmed readable
-    // within the verification window. Surface this so the caller can return an
-    // appropriate error instead of falsely reporting successful creation.
-    throw new Error(
-      `Quotation ${meta.quotationId} was written but could not be confirmed readable after ${MAX_VERIFY_ATTEMPTS} verification attempts. Please try again in a moment.`
-    );
-  }
-
   return { rowsWritten: rows.length };
 }
 
@@ -1217,16 +1170,6 @@ export async function appendQuotation(quotation, meta) {
 //   item rows remain for the quotation.
 // Unrelated rows are never touched, and no new quotation number is generated.
 export async function updateQuotationByNo(quotationNo, quotation) {
-  // DIAGNOSTIC LOGGING - UPDATE DEBUG
-  console.log("[UPDATE DEBUG] quotationNo:", quotationNo);
-  console.log("[UPDATE DEBUG] normalizedQuotationNo:", quotationNo);
-  console.log("[UPDATE DEBUG] input item count:", quotation.items?.length);
-  console.log("[UPDATE DEBUG] input items:", quotation.items?.map(item => ({
-    partNo: item.partNo,
-    quantity: item.quantity,
-    unitPrice: item.unitPrice,
-  })));
-
   const rows = await readSheetRange(DATA_SHEET_TAB, null);
 
   if (!rows || rows.length < 2) return { success: false, reason: "empty" };
@@ -1240,13 +1183,7 @@ export async function updateQuotationByNo(quotationNo, quotation) {
     }
   }
 
-  // DIAGNOSTIC LOGGING - UPDATE DEBUG ROW LOOKUP
-  console.log("[UPDATE DEBUG] matching row indices:", targetRowIndices);
-  console.log("[UPDATE DEBUG] existing row count:", targetRowIndices.length);
-  console.log("[UPDATE DEBUG] target sheet rows:", targetRowIndices.map(i => i + 1));
-
   if (targetRowIndices.length === 0) {
-    console.log("[UPDATE DEBUG] quotation not found in sheet");
     return { success: false, reason: "not-found" };
   }
 
@@ -1259,11 +1196,6 @@ export async function updateQuotationByNo(quotationNo, quotation) {
   let rowsWritten = 0;
   let rowsAppended = 0;
   let rowsCleared = 0;
-
-  // DIAGNOSTIC LOGGING - UPDATE DEBUG WRITE PREPARATION
-  console.log("[UPDATE DEBUG] new item rows count:", newRows.length);
-  console.log("[UPDATE DEBUG] rows to overwrite:", Math.min(newRows.length, sheetRows.length));
-  console.log("[UPDATE DEBUG] rows to clear:", newRows.length < sheetRows.length ? sheetRows.length - newRows.length : 0);
 
   for (let k = 0; k < Math.min(newRows.length, sheetRows.length); k++) {
     // Preserve every existing cell we do not own (e.g. "Record #" at index 0,
@@ -1279,14 +1211,12 @@ export async function updateQuotationByNo(quotationNo, quotation) {
     }
     
     const range = `A${sheetRows[k]}:${writeCol}${sheetRows[k]}`;
-    console.log("[UPDATE DEBUG] writing row:", sheetRows[k], "range:", range);
     await updateSheetRow(DATA_SHEET_TAB, range, [merged]);
     rowsWritten += 1;
   }
 
   if (newRows.length > sheetRows.length) {
     const extra = newRows.slice(sheetRows.length);
-    console.log("[UPDATE DEBUG] appending", extra.length, "extra rows");
     await appendSheetRows(DATA_SHEET_TAB, extra);
     rowsAppended = extra.length;
   } else if (newRows.length < sheetRows.length) {
@@ -1294,20 +1224,11 @@ export async function updateQuotationByNo(quotationNo, quotation) {
     const rowsToClear = [];
     for (let k = newRows.length; k < sheetRows.length; k++) {
       const range = `A${sheetRows[k]}:${fullCol}${sheetRows[k]}`;
-      console.log("[UPDATE DEBUG] clearing row:", sheetRows[k], "range:", range);
       rowsToClear.push(range);
       await clearSheetRange(DATA_SHEET_TAB, range);
       rowsCleared += 1;
     }
-    console.log("[UPDATE DEBUG] cleared ranges:", rowsToClear);
   }
-
-  // DIAGNOSTIC LOGGING - UPDATE DEBUG RESULT
-  console.log("[UPDATE DEBUG] final result:", {
-    rowsWritten,
-    rowsAppended,
-    rowsCleared,
-  });
 
   return { success: true, quotationNo, rowsWritten, rowsAppended, rowsCleared };
 }

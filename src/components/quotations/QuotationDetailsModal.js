@@ -16,66 +16,23 @@ export default function QuotationDetailsModal({ quotationNo, onClose }) {
     setLoading(true);
     setError(null);
 
-    // Check sessionStorage first for newly created quotations to avoid
-    // Google Sheets read-after-write propagation delay issues.
-    const sessionKey = `new-quotation-${quotationNo}`;
-    const cachedQuotation = sessionStorage.getItem(sessionKey);
-    
-    if (cachedQuotation) {
-      try {
-        const parsed = JSON.parse(cachedQuotation);
-        setData(parsed);
-        setLoading(false);
-        return;
-      } catch (err) {
-        // If parsing fails, fall through to API call
-        console.error("Failed to parse cached quotation:", err);
-        sessionStorage.removeItem(sessionKey);
-      }
-    }
-
-    // Retry up to 5 times for HTTP 404 only (Google Sheets read-after-write
-    // propagation delay). All other status codes and network errors are handled
-    // on the first attempt without retrying.
-    const MAX_ATTEMPTS = 5;
-    const RETRY_DELAY_MS = 1500;
-
     (async () => {
-      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-        if (cancelled) return;
-
-        if (attempt > 0) {
-          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
-          if (cancelled) return;
-        }
-
-        let res, json;
-        try {
-          res = await fetch(`/api/quotations/${encodeURIComponent(quotationNo)}`);
-          json = await res.json();
-        } catch (err) {
-          if (cancelled) return;
-          setError(err.message || "Network error.");
-          setLoading(false);
-          return;
-        }
+      try {
+        const res = await fetch(`/api/quotations/${encodeURIComponent(quotationNo)}`);
+        const json = await res.json();
 
         if (cancelled) return;
 
         if (json.success) {
           setData(json.data);
-          setLoading(false);
-          return;
-        }
-
-        // Only retry on 404; any other failure is final.
-        if (res.status !== 404 || attempt === MAX_ATTEMPTS - 1) {
+        } else {
           setError(json.message || "Failed to load quotation.");
-          setLoading(false);
-          return;
         }
-
-        // 404 and attempts remain — loop continues after delay.
+      } catch (err) {
+        if (cancelled) return;
+        setError(err.message || "Network error.");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
 

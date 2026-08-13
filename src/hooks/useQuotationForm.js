@@ -177,41 +177,12 @@ export function useQuotationForm({ mode = "create", quotationNo = null } = {}) {
 
     setSubmitting(true);
     try {
-      // DIAGNOSTIC LOGGING - EDIT DEBUG
-      if (isEdit) {
-        console.log("[EDIT DEBUG] quotationNo:", editingQuotationNo);
-        console.log("[EDIT DEBUG] PUT URL:", url);
-        console.log("[EDIT DEBUG] PUT payload:", {
-          customerName: payload.customer?.customerName,
-          quotationDate: payload.quotation?.quotationDate,
-          itemCount: payload.items?.length,
-          items: payload.items?.map(item => ({
-            partNo: item.partNo,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-          })),
-        });
-      }
-
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const result = await response.json();
-
-      // DIAGNOSTIC LOGGING - EDIT DEBUG RESPONSE
-      if (isEdit) {
-        console.log("[EDIT DEBUG] PUT response:", {
-          status: response.status,
-          ok: response.ok,
-          success: result.success,
-          message: result.message,
-          rowsWritten: result.rowsWritten,
-          rowsAppended: result.rowsAppended,
-          rowsCleared: result.rowsCleared,
-        });
-      }
 
       if (!response.ok || !result.success) {
         if (result.errors && Object.keys(result.errors).length) {
@@ -225,11 +196,6 @@ export function useQuotationForm({ mode = "create", quotationNo = null } = {}) {
       }
 
       if (isEdit) {
-        // Clear sessionStorage for edited quotation to force fresh read
-        const sessionKey = `new-quotation-${editingQuotationNo}`;
-        console.log("[EDIT DEBUG] Clearing sessionStorage key:", sessionKey);
-        sessionStorage.removeItem(sessionKey);
-
         toast.success("Quotation updated", `Reference ${editingQuotationNo} updated successfully.`);
         return { success: true, quotationId: editingQuotationNo };
       }
@@ -237,24 +203,8 @@ export function useQuotationForm({ mode = "create", quotationNo = null } = {}) {
       setLastQuotationId(result.quotationId);
       toast.success("Quotation submitted", `Reference ${result.quotationId} saved successfully.`);
       
-      // Store the complete quotation data in sessionStorage so it can be
-      // displayed immediately without a Google Sheets read, avoiding the
-      // cross-instance propagation delay issue.
-      // Include a timestamp so the cache can be validated for freshness.
-      if (result.quotation) {
-        const quotationWithTimestamp = {
-          ...result.quotation,
-          _cachedAt: Date.now(),
-        };
-        sessionStorage.setItem(`new-quotation-${result.quotationId}`, JSON.stringify(quotationWithTimestamp));
-        // Auto-expire after 5 minutes
-        setTimeout(() => {
-          sessionStorage.removeItem(`new-quotation-${result.quotationId}`);
-        }, 5 * 60 * 1000);
-      }
-      
       resetForm();
-      return { success: true, quotationId: result.quotationId, quotation: result.quotation };
+      return { success: true, quotationId: result.quotationId };
     } catch (error) {
       toast.error("Network error", "Couldn't reach the server. Check your connection and retry.");
       return { success: false };
