@@ -14,6 +14,7 @@ import {
   RefreshCw,
   LayoutDashboard,
   Filter,
+  Calendar,
 } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import Card, { CardHeader, CardBody } from "@/components/ui/Card";
@@ -29,6 +30,7 @@ import {
   DonutChart,
   CHART_COLORS,
 } from "@/components/dashboard/charts";
+import TodayFollowupsModal from "@/components/dashboard/TodayFollowupsModal";
 import DashboardFilterBar from "@/components/dashboard/DashboardFilterBar";
 
 const DEFAULT_FILTERS = {
@@ -71,9 +73,12 @@ function pct(part, total) {
   return Math.round((part / total) * 1000) / 10;
 }
 
-function KpiCard({ label, value, sub, icon: Icon, tint, className }) {
+function KpiCard({ label, value, sub, icon: Icon, tint, className, onClick, clickable }) {
   return (
-    <Card className={cn("p-4 sm:p-5", className)}>
+    <Card 
+      className={cn("p-4 sm:p-5", clickable && "cursor-pointer hover:shadow-card-hover transition-shadow", className)}
+      onClick={onClick}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">{label}</p>
@@ -102,6 +107,10 @@ export default function DashboardPage() {
   const [reloadToken, setReloadToken] = useState(0);
   const [me, setMe] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [todayFollowupCount, setTodayFollowupCount] = useState(0);
+  const [showTodayFollowups, setShowTodayFollowups] = useState(false);
+  const [todayFollowups, setTodayFollowups] = useState(null);
+  const [loadingTodayFollowups, setLoadingTodayFollowups] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -177,6 +186,38 @@ export default function DashboardPage() {
     };
   }, [query, reloadToken]);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/dashboard/today-followups")
+      .then((res) => res.json())
+      .then((json) => {
+        if (!cancelled && json.success) {
+          setTodayFollowups(json.followups);
+          setTodayFollowupCount(json.followups.length);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const loadTodayFollowups = useCallback(async () => {
+    setLoadingTodayFollowups(true);
+    try {
+      const res = await fetch("/api/dashboard/today-followups");
+      const json = await res.json();
+      if (json.success) {
+        setTodayFollowups(json.followups);
+        setTodayFollowupCount(json.followups.length);
+      }
+    } catch (err) {
+      console.error("Failed to load today's follow-ups:", err);
+    } finally {
+      setLoadingTodayFollowups(false);
+    }
+  }, []);
+
   const kpis = useMemo(() => {
     if (!data) return [];
     const s = data.summary;
@@ -224,11 +265,16 @@ export default function DashboardPage() {
         tint: "bg-accent-50 text-accent-600",
       },
       {
-        label: "Avg Quotation Value",
-        value: formatCompactCurrency(s.averageQuotationValue),
-        sub: "per quotation",
-        icon: Calculator,
-        tint: "bg-ink-50 text-ink-600",
+        label: "Today Follow-up",
+        value: todayFollowups?.length || 0,
+        sub: "scheduled for today",
+        icon: Calendar,
+        tint: "bg-amber-50 text-amber-600",
+        onClick: async () => {
+          await loadTodayFollowups();
+          setShowTodayFollowups(true);
+        },
+        clickable: true,
       },
       {
         label: "Items Quoted",
@@ -238,7 +284,7 @@ export default function DashboardPage() {
         tint: "bg-accent-50 text-accent-600",
       },
     ];
-  }, [data]);
+  }, [data, todayFollowups]);
 
   const charts = useMemo(() => {
     if (!data) return null;
@@ -545,6 +591,15 @@ export default function DashboardPage() {
             </Card>
           </div>
         </div>
+      )}
+
+      {showTodayFollowups && (
+        <TodayFollowupsModal
+          isOpen={showTodayFollowups}
+          onClose={() => setShowTodayFollowups(false)}
+          followups={todayFollowups}
+          loading={loadingTodayFollowups}
+        />
       )}
 
     </AppShell>

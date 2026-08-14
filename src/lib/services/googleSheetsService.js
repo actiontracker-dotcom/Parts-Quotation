@@ -1611,7 +1611,7 @@ function followupTimestampKey(record) {
  *
  * Returns `[{ Timestamp, "Quotation No", "Submission Type", ...all columns }]`.
  */
-async function readFollowupFormRecords() {
+export async function readFollowupFormRecords() {
   const rows = await readSheetRange(FOLLOWUP_FORM_SHEET_TAB, null);
 
   if (!rows || rows.length < 2) return [];
@@ -1651,6 +1651,12 @@ export async function getQuotationFollowupHistory(quotationNo) {
   const records = await readFollowupFormRecords();
   return records.filter((record) => record["Quotation No"] === quotationNo);
 }
+
+/**
+ * Returns ALL follow-up / order-status records from "Followup Form for Quotation".
+ * Newest first. Used for dashboard today's follow-ups feature.
+ */
+// Removed duplicate function
 
 // ─── QUOTATION FOLLOW-UP UPDATE (DATA SHEET) ────────────────────────────────────
 // Updates ONLY the follow-up fields of an existing DATA-sheet quotation.
