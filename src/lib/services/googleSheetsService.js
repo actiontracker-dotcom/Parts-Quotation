@@ -7,6 +7,100 @@ const PARTS_SHEET_TAB = "Products";
 const DATA_SHEET_TAB = "Data";
 const FOLLOWUP_FORM_SHEET_TAB = "Followup Form for Quotation";
 
+// ─── GOOGLE SHEET DATE/TIMESTAMP WRITE FORMATTING ─────────────────────────────
+// Values are written to Google Sheets as fixed TEXT so the sheet always shows
+// the intended calendar date/time regardless of the spreadsheet locale:
+//   - dates:      DD/MM/YYYY
+//   - timestamps: DD/MM/YYYY HH:mm:ss (Asia/Kolkata)
+// These helpers are applied ONLY at the write boundary; read parsing is
+// untouched.
+
+const SHEET_DATE_PAD = (n) => String(n).padStart(2, "0");
+
+const SHEET_IST_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Kolkata",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+function parseSheetDateInput(value) {
+  const s = String(value).trim();
+  if (!s) return null;
+
+  // YYYY-MM-DD (HTML date-input value). Parsed component-wise so a server
+  // running in a non-UTC timezone never shifts the calendar day by one.
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})([ T].*)?$/);
+  if (iso) {
+    const [, y, m, d] = iso.map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  // DD/MM/YYYY or DD-MM-YYYY (already formatted / legacy sheet values).
+  const dmy = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (dmy) {
+    const [, d, m, y] = dmy.map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  // Legacy "D-Mon-YY" style (e.g. "1-Aug-25") used by older Price (w.e.f) values.
+  const mon = s.match(/^(\d{1,2})[-/ ]([A-Za-z]{3})[-/ ](\d{2,4})$/);
+  if (mon) {
+    const MONTHS = {
+      jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+      jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+    };
+    const m = MONTHS[mon[2].slice(0, 3).toLowerCase()];
+    if (m) {
+      const yRaw = Number(mon[3]);
+      const y = yRaw < 100 ? 2000 + yRaw : yRaw;
+      return new Date(y, m - 1, Number(mon[1]));
+    }
+  }
+
+  const parsed = new Date(s);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+// Interprets a value as an instant. Already-formatted "DD/MM/YYYY HH:mm:ss"
+// values are treated as Asia/Kolkata wall-clock (IST is UTC+05:30, no DST) so
+// re-saving existing rows round-trips without drifting.
+function parseTimestampInput(value) {
+  const dmy = String(value).match(/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})$/);
+  if (dmy) {
+    const [, d, m, y, h, mi, se] = dmy.map(Number);
+    return new Date(Date.UTC(y, m - 1, d, h, mi, se) - 5.5 * 3600 * 1000);
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function toSheetDate(value) {
+  if (value === undefined || value === null) return "";
+  const s = String(value).trim();
+  if (!s) return "";
+  const date = parseSheetDateInput(s);
+  if (!date) return s;
+  return `${SHEET_DATE_PAD(date.getDate())}/${SHEET_DATE_PAD(date.getMonth() + 1)}/${date.getFullYear()}`;
+}
+
+function toSheetTimestamp(value) {
+  if (value === undefined || value === null) return "";
+  const s = String(value).trim();
+  if (!s) return "";
+  const date = parseTimestampInput(s);
+  if (!date) return s;
+  const parts = {};
+  for (const p of SHEET_IST_FORMATTER.formatToParts(date)) {
+    if (p.type !== "literal") parts[p.type] = p.value;
+  }
+  return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
 // ─── LOW-LEVEL SHEET I/O ───────────────────────────────────────────────────────
 // Implemented in googleSheetsClient.js — imported above.
 
@@ -1088,7 +1182,7 @@ export async function buildQuotationRows(quotation, { quotationId, createdAt }) 
   return items.map((item) => {
     const row = new Array(numCols).fill("");
     const fieldMap = {
-      Timestamp: createdAt,
+      Timestamp: toSheetTimestamp(createdAt),
       "Customer Name": customer.customerName,
       "Full Address with GST": customer.fullAddressGst,
       "Full Address": customer.fullAddress || "",
@@ -1110,9 +1204,9 @@ export async function buildQuotationRows(quotation, { quotationId, createdAt }) 
       "His Email Id": "",
       "Quotation No": quotationId,
       Validity: info.quotationValidity,
-      "Quotation Date": info.quotationDate,
+      "Quotation Date": toSheetDate(info.quotationDate),
       "Partyref No.": info.partyReferenceNumber,
-      "Partyref Dt.": info.partyReferenceDate,
+      "Partyref Dt.": toSheetDate(info.partyReferenceDate),
       "Payment Terms": info.paymentTerms,
       "Quotation Validity": info.quotationValidity,
       "Terms Of Delivery": info.termsOfDelivery,
@@ -1135,7 +1229,7 @@ export async function buildQuotationRows(quotation, { quotationId, createdAt }) 
       "Total Amount": computeLineTotal(item),
       "Basic Total Amount": calcBasicTotal(item),
       Availability: item.availability,
-      "Price (w.e.f)": item.priceWef,
+      "Price (w.e.f)": toSheetDate(item.priceWef),
       "Live Stock": item.liveStock,
       "GST Amount": computeGstAmount(item, DEFAULT_GST_RATE),
     };
@@ -1529,18 +1623,18 @@ export async function buildFollowupFormRow(data) {
   const row = new Array(width).fill("");
 
   const fieldMap = {
-    Timestamp: data.timestamp,
+    Timestamp: toSheetTimestamp(data.timestamp),
     "Quotation No": data.quotationNo,
     "Submission Type": data.submissionType,
-    "Next Followup Date": data.nextFollowupDate,
+    "Next Followup Date": toSheetDate(data.nextFollowupDate),
     "Followup Status": data.followupStatus,
     "Followup Remark": data.followupRemark,
     "Order Status": data.orderStatus,
     "Attach Order PDF": data.attachOrderPDF,
-    "Order Received date": data.orderReceivedDate,
+    "Order Received date": toSheetDate(data.orderReceivedDate),
     "Remark for Order": data.remarkForOrder,
     "Order Number": data.orderNumber,
-    "Order Date": data.orderDate,
+    "Order Date": toSheetDate(data.orderDate),
     "Order Verification Status": data.orderVerificationStatus,
     "Attached Payment Receipt": data.attachedPaymentReceipt,
     "Due Days": data.dueDays,
@@ -1589,8 +1683,8 @@ export async function appendQuotationFollowupRecord(data) {
 function followupTimestampValue(value) {
   const parsed = Number(value);
   if (Number.isFinite(parsed)) return parsed;
-  const date = new Date(value);
-  return isNaN(date.getTime()) ? 0 : date.getTime();
+  const date = parseTimestampInput(value);
+  return date ? date.getTime() : 0;
 }
 
 function followupTimestampKey(record) {
@@ -1733,7 +1827,7 @@ export async function updateQuotationNextFollowup(quotationNo, data) {
   const dataResult = await updateQuotationDataFieldsByNo(quotationNo, (rows, headers, idxs) => {
     const currentCount = getCellNum(rows[idxs[0]], headers, "Number of Followup");
     return {
-      "Next Followup date": data.nextFollowupDate || "",
+      "Next Followup date": toSheetDate(data.nextFollowupDate || ""),
       "Order Follow-up Summary": data.followupRemark || "",
       "Next followup Status": data.followupStatus || "",
       "Number of Followup": String(currentCount + 1),
@@ -1781,7 +1875,7 @@ export async function updateQuotationOrderStatus(quotationNo, data) {
   const dataResult = await updateQuotationDataFieldsByNo(quotationNo, () => ({
     "Order Status": data.orderStatus || "",
     "Order Number": data.orderNumber || "",
-    "Order received Date": data.orderReceivedDate || "",
+    "Order received Date": toSheetDate(data.orderReceivedDate || ""),
     "Remark for Order Received": data.remarkForOrder || "",
   }));
 
