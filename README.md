@@ -1,3 +1,17 @@
+
+# The Google Sheet ID containing all data
+# Sheet tabs used:
+#   "Data"                       – Quotation submissions
+#   "Mastersheet"                – Customer master
+#   "Products"                   – Parts master
+#   "Followup Form for Quotation" – Follow-up / order-status history log
+#   "Users"                      – Username / Password (plain text, testing) / Active
+GOOGLE_SHEET_ID=1NwQMjeodQoicPM9ZtbDuyX5xXFtpV1YdcDcEtZE6h9c
+
+# Secret used to sign the authentication session cookie (HMAC-SHA256).
+# Keep it private and stable: changing it invalidates all active sessions.
+AUTH_SECRET=O2D_Quotation_Manager_2026_8fK9mP4xQ7vL2nR6sT1
+
 # Quotation Manager
 
 A modern, SaaS-style quotation management application. This is the foundation

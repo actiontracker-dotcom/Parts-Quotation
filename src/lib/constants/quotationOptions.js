@@ -41,6 +41,15 @@ export const ORDER_STATUS_OPTIONS = [
   { value: "Partial", label: "Partial" },
 ];
 
+// Follow-up status values for the follow-up lifecycle. A new follow-up is
+// always created as "Pending"; when the next follow-up is scheduled, the
+// previous current one is automatically closed as "Completed". Kept in one
+// place so the dashboard filter and the service agree on the canonical values.
+export const FOLLOWUP_STATUS_OPTIONS = [
+  { value: "Pending", label: "Pending" },
+  { value: "Completed", label: "Completed" },
+];
+
 export function createEmptyItemRow() {
   return {
     id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `row-${Date.now()}-${Math.random()}`,

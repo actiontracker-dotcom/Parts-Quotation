@@ -1746,6 +1746,98 @@ export async function getQuotationFollowupHistory(quotationNo) {
   return records.filter((record) => record["Quotation No"] === quotationNo);
 }
 
+function followupDateValue(value) {
+  const parsed = parseSheetDateInput(value);
+  return parsed ? parsed.getTime() : 0;
+}
+
+/**
+ * Returns the single current/actionable follow-up record per quotation — the
+ * newest "Next Follow-up" history row whose Followup Status is not "Completed"
+ * (Pending, or an empty legacy status). Order Status rows are NEVER considered
+ * follow-up records. Quotations whose follow-up records are all Completed are
+ * omitted.
+ *
+ * This is the data-layer enforcement of "at most one actionable follow-up per
+ * quotation": the dashboard only ever sees one current record per quotation,
+ * so a quotation can never appear more than once in an actionable list. Legacy
+ * rows that already carry "Completed" are never touched.
+ *
+ * Records are sorted by "Next Followup Date" ascending so the dashboard renders
+ * them in due-date order.
+ */
+export async function getCurrentFollowupRecords() {
+  const records = await readFollowupFormRecords();
+
+  const currentByQuotation = new Map();
+  for (const record of records) {
+    const quotationNo = (record["Quotation No"] || "").trim();
+    if (!quotationNo) continue;
+    // Follow-up records are identified by Submission Type = "Next Follow-up".
+    // Order Status rows must never appear as follow-up records.
+    if (String(record["Submission Type"] || "").trim() !== "Next Follow-up") continue;
+    if (String(record["Followup Status"] || "").trim() === "Completed") continue;
+    // Records are newest-first; the first non-Completed Next Follow-up row per
+    // quotation is its current follow-up.
+    if (!currentByQuotation.has(quotationNo)) {
+      currentByQuotation.set(quotationNo, record);
+    }
+  }
+
+  const current = Array.from(currentByQuotation.values());
+  current.sort((a, b) => {
+    const ta = followupDateValue(a["Next Followup Date"]);
+    const tb = followupDateValue(b["Next Followup Date"]);
+    if (ta !== tb) return ta < tb ? -1 : 1;
+    return (a.__sheetRow || 0) - (b.__sheetRow || 0);
+  });
+
+  return current;
+}
+
+/**
+ * Returns the single current PENDING follow-up record per quotation — the newest
+ * "Next Follow-up" history row whose Followup Status is explicitly "Pending".
+ * Order Status rows are NEVER considered follow-up records. Quotations with no
+ * Pending Next Follow-up row are omitted, so at most one current Pending exists
+ * per quotation and a past-dated Pending record stays Pending (a past date never
+ * auto-completes it).
+ *
+ * This backs the "Pending Follow-ups" dashboard card/detail view. Completed
+ * records never appear here — they are read from the full history separately,
+ * so all historical Completed rows are preserved.
+ *
+ * Records are sorted by "Next Followup Date" ascending.
+ */
+export async function getCurrentPendingFollowupRecords() {
+  const records = await readFollowupFormRecords();
+
+  const currentByQuotation = new Map();
+  for (const record of records) {
+    const quotationNo = (record["Quotation No"] || "").trim();
+    if (!quotationNo) continue;
+    // Follow-up records are identified by Submission Type = "Next Follow-up".
+    // Order Status rows must never appear as follow-up records.
+    if (String(record["Submission Type"] || "").trim() !== "Next Follow-up") continue;
+    if (String(record["Followup Status"] || "").trim() !== "Pending") continue;
+    // Records are newest-first; the first Pending Next Follow-up row per
+    // quotation is its current Pending follow-up.
+    if (!currentByQuotation.has(quotationNo)) {
+      currentByQuotation.set(quotationNo, record);
+    }
+  }
+
+  const current = Array.from(currentByQuotation.values());
+  current.sort((a, b) => {
+    const ta = followupDateValue(a["Next Followup Date"]);
+    const tb = followupDateValue(b["Next Followup Date"]);
+    if (ta !== tb) return ta < tb ? -1 : 1;
+    return (a.__sheetRow || 0) - (b.__sheetRow || 0);
+  });
+
+  return current;
+}
+
 /**
  * Returns ALL follow-up / order-status records from "Followup Form for Quotation".
  * Newest first. Used for dashboard today's follow-ups feature.
@@ -1808,15 +1900,56 @@ async function updateQuotationDataFieldsByNo(quotationNo, buildFieldValues) {
 }
 
 /**
+ * Marks the quotation's PENDING follow-up records as "Completed" in the history
+ * sheet. Every history row whose Submission Type is "Next Follow-up" AND
+ * Followup Status is "Pending" is set to "Completed". This guarantees the
+ * quotation has exactly one actionable state going forward: when a new Next
+ * Follow-up is created the previous Pending row(s) close, and when a terminal
+ * Order Status is submitted the current Pending row(s) close. Already-Completed
+ * history is never changed, and Order Status rows (which always keep Followup
+ * Status blank) are never treated as follow-up records. When there is no
+ * Pending Next Follow-up row nothing is written.
+ */
+async function completePendingFollowupsForQuotation(quotationNo) {
+  const records = await getQuotationFollowupHistory(quotationNo);
+  if (records.length === 0) return;
+
+  const headers = await readFollowupFormHeaders();
+  const statusIdx = headers["Followup Status"];
+  if (statusIdx === undefined) return;
+
+  const colLetter = getColumnLetter(statusIdx);
+
+  const pendingRows = records
+    .filter((record) => {
+      if (String(record["Submission Type"] || "").trim() !== "Next Follow-up") return false;
+      return String(record["Followup Status"] || "").trim() === "Pending";
+    })
+    .filter((record) => record.__sheetRow)
+    .map((record) => record.__sheetRow);
+
+  for (const sheetRow of pendingRows) {
+    const range = `${colLetter}${sheetRow}:${colLetter}${sheetRow}`;
+    await updateSheetRow(FOLLOWUP_FORM_SHEET_TAB, range, [["Completed"]]);
+  }
+}
+
+/**
  * Records a "Next Follow-up" submission.
  *
  * 1. Updates the Data-sheet quotation (by "Quotation No"):
  *    - "Next Followup date"  <- submitted date
  *    - "Order Follow-up Summary" <- submitted remark
- *    - "Next followup Status" <- submitted status
+ *    - "Next followup Status" <- "Pending"
  *    - "Number of Followup"  <- previous value + 1 (0 when empty/non-numeric)
- * 2. Appends ONE history row to "Followup Form for Quotation"
- *    (Submission Type = "Next Follow-up").
+ * 2. Closes the quotation's previous current follow-up in the history sheet by
+ *    setting its "Followup Status" to "Completed" (the row is kept, never
+ *    deleted), so the quotation keeps at most one Pending follow-up.
+ * 3. Appends ONE new history row to "Followup Form for Quotation"
+ *    (Submission Type = "Next Follow-up", Followup Status = "Pending").
+ *
+ * Follow-up status is always assigned automatically: the new follow-up becomes
+ * "Pending" and the previous current one becomes "Completed".
  *
  * Success is reported only when BOTH writes succeed. If either fails the
  * caller receives success:false and no success message is sent to the user.
@@ -1829,7 +1962,7 @@ export async function updateQuotationNextFollowup(quotationNo, data) {
     return {
       "Next Followup date": toSheetDate(data.nextFollowupDate || ""),
       "Order Follow-up Summary": data.followupRemark || "",
-      "Next followup Status": data.followupStatus || "",
+      "Next followup Status": "Pending",
       "Number of Followup": String(currentCount + 1),
     };
   });
@@ -1837,23 +1970,28 @@ export async function updateQuotationNextFollowup(quotationNo, data) {
   if (!dataResult.success) return dataResult;
 
   try {
+    await completePendingFollowupsForQuotation(quotationNo);
+
     const history = await appendQuotationFollowupRecord({
       timestamp,
       quotationNo,
       submissionType: "Next Follow-up",
       nextFollowupDate: data.nextFollowupDate || "",
-      followupStatus: data.followupStatus || "",
+      followupStatus: "Pending",
       followupRemark: data.followupRemark || "",
     });
     return { success: true, data: dataResult, history };
   } catch (error) {
     console.error(
-      "[updateQuotationNextFollowup] Data updated but history append failed:",
+      "[updateQuotationNextFollowup] Data updated but history write failed:",
       error
     );
     return { success: false, reason: "history-failed" };
   }
 }
+
+// Order Status values that close the quotation's current Pending Next Follow-up.
+const CLOSING_ORDER_STATUSES = new Set(["Won", "Loss", "Dead", "Partial"]);
 
 /**
  * Records an "Order Status" submission.
@@ -1863,8 +2001,15 @@ export async function updateQuotationNextFollowup(quotationNo, data) {
  *    - "Order Number"             <- submitted order number
  *    - "Order received Date"      <- submitted order received date
  *    - "Remark for Order Received" <- submitted remark
- * 2. Appends ONE history row to "Followup Form for Quotation"
- *    (Submission Type = "Order Status").
+ * 2. When the submitted Order Status is Won / Loss / Dead / Partial, closes the
+ *    quotation's current Pending Next Follow-up in the history sheet by setting
+ *    its "Followup Status" to "Completed" (the row is kept, never deleted). If
+ *    there is no current Pending follow-up, nothing is changed. Already
+ *    Completed history and unrelated records are never touched.
+ * 3. Appends ONE history row to "Followup Form for Quotation"
+ *    (Submission Type = "Order Status"). The appended row always keeps "Next
+ *    Followup Date" and "Followup Status" blank — the Order Status row itself
+ *    never becomes a follow-up record.
  *
  * Number of Followup is intentionally NOT changed by this action.
  * Unrelated columns are never touched.
@@ -1882,6 +2027,11 @@ export async function updateQuotationOrderStatus(quotationNo, data) {
   if (!dataResult.success) return dataResult;
 
   try {
+    // Close the current Pending Next Follow-up for terminal order statuses.
+    if (CLOSING_ORDER_STATUSES.has(String(data.orderStatus || "").trim())) {
+      await completePendingFollowupsForQuotation(quotationNo);
+    }
+
     const history = await appendQuotationFollowupRecord({
       timestamp,
       quotationNo,

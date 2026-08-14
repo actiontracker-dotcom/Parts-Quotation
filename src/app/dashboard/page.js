@@ -30,7 +30,7 @@ import {
   DonutChart,
   CHART_COLORS,
 } from "@/components/dashboard/charts";
-import TodayFollowupsModal from "@/components/dashboard/TodayFollowupsModal";
+import FollowupsModal from "@/components/dashboard/FollowupsModal";
 import DashboardFilterBar from "@/components/dashboard/DashboardFilterBar";
 
 const DEFAULT_FILTERS = {
@@ -38,6 +38,7 @@ const DEFAULT_FILTERS = {
   division: "All",
   orderStatus: "All",
   enquiryGeneratedBy: "All",
+  followupStatus: "All",
   fromDate: "",
   toDate: "",
 };
@@ -107,10 +108,7 @@ export default function DashboardPage() {
   const [reloadToken, setReloadToken] = useState(0);
   const [me, setMe] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
-  const [todayFollowupCount, setTodayFollowupCount] = useState(0);
-  const [showTodayFollowups, setShowTodayFollowups] = useState(false);
-  const [todayFollowups, setTodayFollowups] = useState(null);
-  const [loadingTodayFollowups, setLoadingTodayFollowups] = useState(false);
+  const [showFollowups, setShowFollowups] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -140,6 +138,7 @@ export default function DashboardPage() {
     if (filters.division !== "All") count += 1;
     if (filters.orderStatus !== "All") count += 1;
     if (filters.enquiryGeneratedBy !== "All") count += 1;
+    if (filters.followupStatus !== "All") count += 1;
     return count;
   }, [filters]);
 
@@ -155,6 +154,7 @@ export default function DashboardPage() {
     if (filters.division !== "All") params.set("division", filters.division);
     if (filters.orderStatus !== "All") params.set("orderStatus", filters.orderStatus);
     if (filters.enquiryGeneratedBy !== "All") params.set("enquiryGeneratedBy", filters.enquiryGeneratedBy);
+    if (filters.followupStatus !== "All") params.set("followupStatus", filters.followupStatus);
     return params.toString();
   }, [filters]);
 
@@ -185,38 +185,6 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, [query, reloadToken]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/dashboard/today-followups")
-      .then((res) => res.json())
-      .then((json) => {
-        if (!cancelled && json.success) {
-          setTodayFollowups(json.followups);
-          setTodayFollowupCount(json.followups.length);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const loadTodayFollowups = useCallback(async () => {
-    setLoadingTodayFollowups(true);
-    try {
-      const res = await fetch("/api/dashboard/today-followups");
-      const json = await res.json();
-      if (json.success) {
-        setTodayFollowups(json.followups);
-        setTodayFollowupCount(json.followups.length);
-      }
-    } catch (err) {
-      console.error("Failed to load today's follow-ups:", err);
-    } finally {
-      setLoadingTodayFollowups(false);
-    }
-  }, []);
 
   const kpis = useMemo(() => {
     if (!data) return [];
@@ -265,15 +233,12 @@ export default function DashboardPage() {
         tint: "bg-accent-50 text-accent-600",
       },
       {
-        label: "Today Follow-up",
-        value: todayFollowups?.length || 0,
-        sub: "scheduled for today",
+        label: "Pending Follow-ups",
+        value: data.pendingFollowupCount || 0,
+        sub: "current pending across all dates",
         icon: Calendar,
         tint: "bg-amber-50 text-amber-600",
-        onClick: async () => {
-          await loadTodayFollowups();
-          setShowTodayFollowups(true);
-        },
+        onClick: () => setShowFollowups(true),
         clickable: true,
       },
       {
@@ -284,7 +249,7 @@ export default function DashboardPage() {
         tint: "bg-accent-50 text-accent-600",
       },
     ];
-  }, [data, todayFollowups]);
+  }, [data]);
 
   const charts = useMemo(() => {
     if (!data) return null;
@@ -593,12 +558,64 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {showTodayFollowups && (
-        <TodayFollowupsModal
-          isOpen={showTodayFollowups}
-          onClose={() => setShowTodayFollowups(false)}
-          followups={todayFollowups}
-          loading={loadingTodayFollowups}
+      {!error && !loading && data && (
+        <div className="mt-6">
+          <Card>
+            <CardHeader
+              eyebrow="Actionable"
+              title="Follow-ups"
+              description="Current follow-up per quotation — filtered by Follow-up Status and Next Followup Date"
+            />
+            <CardBody>
+              {data.followups && data.followups.length > 0 ? (
+                <div className="overflow-x-auto rounded-lg border border-ink-100">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-ink-50 border-b border-ink-100">
+                        {["Quotation No", "Customer Name", "Next Followup Date", "Followup Status", "Followup Remark"].map((h) => (
+                          <th key={h} className="px-4 py-3 text-left font-semibold text-ink-600 whitespace-nowrap">
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.followups.map((f, idx) => (
+                        <tr key={idx} className="border-b border-ink-50 transition-colors hover:bg-ink-50/50">
+                          <td className="px-4 py-3 font-mono text-xs font-semibold text-accent-600 whitespace-nowrap">
+                            {f.quotationNo}
+                          </td>
+                          <td className="px-4 py-3 max-w-[220px] truncate font-medium text-ink-900" title={f.customerName}>
+                            {f.customerName}
+                          </td>
+                          <td className="px-4 py-3 text-ink-600 whitespace-nowrap">
+                            {f.nextFollowupDate}
+                          </td>
+                          <td className="px-4 py-3 text-ink-600 whitespace-nowrap">
+                            {f.followupStatus}
+                          </td>
+                          <td className="px-4 py-3 max-w-[300px] truncate text-ink-600" title={f.followupRemark}>
+                            {f.followupRemark}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="py-8 text-center text-sm text-ink-400">
+                  No current follow-ups match the selected filters.
+                </p>
+              )}
+            </CardBody>
+          </Card>
+        </div>
+      )}
+
+      {showFollowups && (
+        <FollowupsModal
+          isOpen={showFollowups}
+          onClose={() => setShowFollowups(false)}
         />
       )}
 

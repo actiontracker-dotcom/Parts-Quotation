@@ -64,9 +64,8 @@ const INTERNAL_KEYS = new Set(["__sheetRow"]);
 
 // Columns that are never shown in the quotation detail Follow-up cards. They
 // are still stored/returned by the API — they are only hidden here because the
-// quotation number is already shown at the top of the details modal and the
-// follow-up status is not relevant inside the card.
-const HIDDEN_KEYS = new Set(["Quotation No", "Followup Status"]);
+// quotation number is already shown at the top of the details modal.
+const HIDDEN_KEYS = new Set(["Quotation No"]);
 
 // Presentation metadata per submission type (icon + soft badge/avatar colors).
 const TYPE_META = {
@@ -343,7 +342,7 @@ export default function QuotationFollowupsPanel({ quotationNo, onDataChanged }) 
                               {isRemark && <StickyNote className="h-3 w-3" />}
                               {col.label}
                             </p>
-                            {col.key === "Order Status" && hasValue(col.value) ? (
+                            {col.key === "Order Status" || col.key === "Followup Status" ? (
                               <div className="mt-2">
                                 <StatusBadge value={col.value} />
                               </div>
