@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { loadQuotations, getCurrentFollowupRecords, getCurrentPendingFollowupRecords } from "@/lib/services/googleSheetsService";
+import { loadQuotations, getCurrentPendingFollowupRecords } from "@/lib/services/googleSheetsService";
 import {
   parseQuotationDate,
   toDateKey,
@@ -87,7 +87,6 @@ export async function GET(request) {
     const divisionFilter = searchParams.get("division") || "";
     const orderStatusFilter = searchParams.get("orderStatus") || "";
     const enquiryGeneratedByFilter = searchParams.get("enquiryGeneratedBy") || "";
-    const followupStatusFilter = searchParams.get("followupStatus") || "";
 
     const { quotations, detailMap } = await loadQuotations();
 
@@ -352,47 +351,14 @@ export async function GET(request) {
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
 
-    // ── Follow-ups (current/actionable, one per quotation) ─────────────────────
-    // The follow-up dataset comes from the history sheet ("Followup Form for
-    // Quotation"). Only current actionable records are considered (newest
-    // non-Completed row per quotation). The Follow-up Status filter runs FIRST,
-    // then the date filter applies to "Next Followup Date" — never Quotation
-    // Date. Completed records can never re-enter the result.
-    const currentFollowups = await getCurrentFollowupRecords();
-
-    // Pending Follow-ups KPI: TOTAL current Pending follow-ups across ALL dates
-    // (past, today and future) — one per quotation via the shared current-Pending
-    // business rule. Deliberately independent of every dashboard filter.
+    // ── Pending Follow-ups KPI ────────────────────────────────────────────────
+    // TOTAL current Pending follow-ups across ALL dates (past, today and future)
+    // — one per quotation via the shared current-Pending business rule.
+    // Deliberately independent of every dashboard filter. The Follow-up Details
+    // modal (a separate feature) loads its own detail data via
+    // /api/dashboard/followups.
     const pendingFollowups = await getCurrentPendingFollowupRecords();
     const pendingFollowupCount = pendingFollowups.length;
-
-    let followupList = currentFollowups;
-    if (followupStatusFilter) {
-      followupList = followupList.filter(
-        (record) => String(record["Followup Status"] || "").trim() === followupStatusFilter
-      );
-    }
-    if (dateRange.from || dateRange.to) {
-      followupList = followupList.filter((record) => {
-        const parsed = parseQuotationDate(record["Next Followup Date"]);
-        if (!parsed) return false;
-        if (dateRange.from && parsed < dateRange.from) return false;
-        if (dateRange.to && parsed > dateRange.to) return false;
-        return true;
-      });
-    }
-
-    const followups = followupList.map((record) => {
-      const quotationNo = (record["Quotation No"] || "").trim();
-      const quotation = quotationMap.get(quotationNo);
-      return {
-        quotationNo,
-        customerName: quotation?.customerName || "",
-        nextFollowupDate: record["Next Followup Date"] || "",
-        followupStatus: record["Followup Status"] || "",
-        followupRemark: record["Followup Remark"] || "",
-      };
-    });
 
     return NextResponse.json(
       {
@@ -407,7 +373,6 @@ export async function GET(request) {
           weeklyTrend,
           recentQuotations,
           topCustomers,
-          followups,
           pendingFollowupCount,
           filters: {
             divisions: allDivisions.sort(),

@@ -38,7 +38,6 @@ const DEFAULT_FILTERS = {
   division: "All",
   orderStatus: "All",
   enquiryGeneratedBy: "All",
-  followupStatus: "All",
   fromDate: "",
   toDate: "",
 };
@@ -138,7 +137,6 @@ export default function DashboardPage() {
     if (filters.division !== "All") count += 1;
     if (filters.orderStatus !== "All") count += 1;
     if (filters.enquiryGeneratedBy !== "All") count += 1;
-    if (filters.followupStatus !== "All") count += 1;
     return count;
   }, [filters]);
 
@@ -154,7 +152,6 @@ export default function DashboardPage() {
     if (filters.division !== "All") params.set("division", filters.division);
     if (filters.orderStatus !== "All") params.set("orderStatus", filters.orderStatus);
     if (filters.enquiryGeneratedBy !== "All") params.set("enquiryGeneratedBy", filters.enquiryGeneratedBy);
-    if (filters.followupStatus !== "All") params.set("followupStatus", filters.followupStatus);
     return params.toString();
   }, [filters]);
 
@@ -555,60 +552,6 @@ export default function DashboardPage() {
               </CardBody>
             </Card>
           </div>
-        </div>
-      )}
-
-      {!error && !loading && data && (
-        <div className="mt-6">
-          <Card>
-            <CardHeader
-              eyebrow="Actionable"
-              title="Follow-ups"
-              description="Current follow-up per quotation — filtered by Follow-up Status and Next Followup Date"
-            />
-            <CardBody>
-              {data.followups && data.followups.length > 0 ? (
-                <div className="overflow-x-auto rounded-lg border border-ink-100">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-ink-50 border-b border-ink-100">
-                        {["Quotation No", "Customer Name", "Next Followup Date", "Followup Status", "Followup Remark"].map((h) => (
-                          <th key={h} className="px-4 py-3 text-left font-semibold text-ink-600 whitespace-nowrap">
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.followups.map((f, idx) => (
-                        <tr key={idx} className="border-b border-ink-50 transition-colors hover:bg-ink-50/50">
-                          <td className="px-4 py-3 font-mono text-xs font-semibold text-accent-600 whitespace-nowrap">
-                            {f.quotationNo}
-                          </td>
-                          <td className="px-4 py-3 max-w-[220px] truncate font-medium text-ink-900" title={f.customerName}>
-                            {f.customerName}
-                          </td>
-                          <td className="px-4 py-3 text-ink-600 whitespace-nowrap">
-                            {f.nextFollowupDate}
-                          </td>
-                          <td className="px-4 py-3 text-ink-600 whitespace-nowrap">
-                            {f.followupStatus}
-                          </td>
-                          <td className="px-4 py-3 max-w-[300px] truncate text-ink-600" title={f.followupRemark}>
-                            {f.followupRemark}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="py-8 text-center text-sm text-ink-400">
-                  No current follow-ups match the selected filters.
-                </p>
-              )}
-            </CardBody>
-          </Card>
         </div>
       )}
 

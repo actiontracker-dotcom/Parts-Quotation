@@ -1752,50 +1752,6 @@ function followupDateValue(value) {
 }
 
 /**
- * Returns the single current/actionable follow-up record per quotation — the
- * newest "Next Follow-up" history row whose Followup Status is not "Completed"
- * (Pending, or an empty legacy status). Order Status rows are NEVER considered
- * follow-up records. Quotations whose follow-up records are all Completed are
- * omitted.
- *
- * This is the data-layer enforcement of "at most one actionable follow-up per
- * quotation": the dashboard only ever sees one current record per quotation,
- * so a quotation can never appear more than once in an actionable list. Legacy
- * rows that already carry "Completed" are never touched.
- *
- * Records are sorted by "Next Followup Date" ascending so the dashboard renders
- * them in due-date order.
- */
-export async function getCurrentFollowupRecords() {
-  const records = await readFollowupFormRecords();
-
-  const currentByQuotation = new Map();
-  for (const record of records) {
-    const quotationNo = (record["Quotation No"] || "").trim();
-    if (!quotationNo) continue;
-    // Follow-up records are identified by Submission Type = "Next Follow-up".
-    // Order Status rows must never appear as follow-up records.
-    if (String(record["Submission Type"] || "").trim() !== "Next Follow-up") continue;
-    if (String(record["Followup Status"] || "").trim() === "Completed") continue;
-    // Records are newest-first; the first non-Completed Next Follow-up row per
-    // quotation is its current follow-up.
-    if (!currentByQuotation.has(quotationNo)) {
-      currentByQuotation.set(quotationNo, record);
-    }
-  }
-
-  const current = Array.from(currentByQuotation.values());
-  current.sort((a, b) => {
-    const ta = followupDateValue(a["Next Followup Date"]);
-    const tb = followupDateValue(b["Next Followup Date"]);
-    if (ta !== tb) return ta < tb ? -1 : 1;
-    return (a.__sheetRow || 0) - (b.__sheetRow || 0);
-  });
-
-  return current;
-}
-
-/**
  * Returns the single current PENDING follow-up record per quotation — the newest
  * "Next Follow-up" history row whose Followup Status is explicitly "Pending".
  * Order Status rows are NEVER considered follow-up records. Quotations with no
