@@ -143,6 +143,7 @@ export default function FollowupsModal({ isOpen, onClose }) {
   const [selectedDates, setSelectedDates] = useState(() => new Set());
   const [activePreset, setActivePreset] = useState("all");
   const [datePopoverOpen, setDatePopoverOpen] = useState(false);
+  const [customMode, setCustomMode] = useState(false);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
   const [page, setPage] = useState(1);
 
@@ -167,7 +168,14 @@ export default function FollowupsModal({ isOpen, onClose }) {
     setPage(1);
     setViewMonth(startOfMonth(new Date()));
     setDatePopoverOpen(false);
+    setCustomMode(false);
   }, [isOpen]);
+
+  // When the popover closes, reset to the preset view so the calendar is not
+  // shown immediately on the next open.
+  useEffect(() => {
+    if (!datePopoverOpen) setCustomMode(false);
+  }, [datePopoverOpen]);
 
   useEffect(() => {
     function handleEscape(e) {
@@ -289,9 +297,9 @@ export default function FollowupsModal({ isOpen, onClose }) {
   const pageEnd = Math.min((pagination?.offset || 0) + LIMIT, total);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 sm:p-8 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div className="fixed inset-0 bg-ink-950/40 cursor-pointer" onClick={onClose} />
-      <div className="relative w-full max-w-5xl bg-white rounded-xl shadow-xl max-h-[92vh] flex flex-col">
+      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-xl bg-white shadow-xl sm:h-[88vh] sm:max-h-[88vh] sm:w-[92vw] sm:max-w-[92vw]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-ink-50 flex-shrink-0">
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
@@ -313,7 +321,7 @@ export default function FollowupsModal({ isOpen, onClose }) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="flex-1 overflow-y-auto px-6 py-6 sm:px-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
               <div className="w-full sm:w-56">
@@ -354,121 +362,142 @@ export default function FollowupsModal({ isOpen, onClose }) {
                   {datePopoverOpen && (
                     <div
                       ref={popoverRef}
-                      className="absolute left-0 top-full z-30 mt-1.5 w-[340px] max-w-[calc(100vw-2rem)] rounded-xl border border-ink-100 bg-white p-4 shadow-xl"
+                      className="absolute left-0 top-full z-30 mt-1.5 w-[300px] max-w-[calc(100vw-2rem)] rounded-xl border border-ink-100 bg-white p-3 shadow-xl"
                     >
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {PRESETS.map((preset) => {
-                          const active = activePreset === preset.id;
-                          return (
+                      {!customMode ? (
+                        <>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {PRESETS.map((preset) => {
+                              const active = activePreset === preset.id;
+                              return (
+                                <button
+                                  key={preset.id}
+                                  type="button"
+                                  onClick={() => handlePreset(preset.id)}
+                                  className={cn(
+                                    "rounded-lg px-3 py-2 text-left text-xs font-semibold transition-colors cursor-pointer",
+                                    active
+                                      ? "bg-accent-50 text-accent-700"
+                                      : "text-ink-600 hover:bg-ink-50"
+                                  )}
+                                >
+                                  {preset.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActivePreset("custom");
+                              setCustomMode(true);
+                            }}
+                            className={cn(
+                              "mt-2 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs font-semibold transition-colors cursor-pointer",
+                              activePreset === "custom"
+                                ? "border-accent-200 bg-accent-50 text-accent-700"
+                                : "border-ink-100 text-ink-700 hover:bg-ink-50"
+                            )}
+                          >
+                            <Calendar className="h-3.5 w-3.5 shrink-0 text-ink-400" />
+                            Custom Dates
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between">
                             <button
-                              key={preset.id}
                               type="button"
-                              onClick={() => handlePreset(preset.id)}
-                              className={cn(
-                                "rounded-lg px-3 py-1.5 text-left text-xs font-semibold transition-colors cursor-pointer",
-                                active
-                                  ? "bg-accent-50 text-accent-700"
-                                  : "text-ink-600 hover:bg-ink-50"
-                              )}
+                              onClick={() =>
+                                setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))
+                              }
+                              className="rounded-md p-1 text-ink-400 transition-colors hover:bg-ink-50 hover:text-ink-700 cursor-pointer"
+                              aria-label="Previous month"
                             >
-                              {preset.label}
+                              <ChevronLeft className="h-4 w-4" />
                             </button>
-                          );
-                        })}
-                      </div>
-
-                      <div className="mt-3 border-t border-ink-50 pt-3">
-                        <div className="flex items-center justify-between">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))
-                            }
-                            className="rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-50 hover:text-ink-700 cursor-pointer"
-                            aria-label="Previous month"
-                          >
-                            <ChevronLeft className="h-4 w-4" />
-                          </button>
-                          <p className="text-sm font-semibold text-ink-900">
-                            {MONTH_FULL[viewMonth.getMonth()]} {viewMonth.getFullYear()}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))
-                            }
-                            className="rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-50 hover:text-ink-700 cursor-pointer"
-                            aria-label="Next month"
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </button>
-                        </div>
-
-                        <div className="mt-2 grid grid-cols-7 gap-1">
-                          {WEEKDAY_LABELS.map((d) => (
-                            <span
-                              key={d}
-                              className="py-1 text-center text-[11px] font-semibold uppercase tracking-wide text-ink-400"
+                            <p className="text-xs font-semibold text-ink-900">
+                              {MONTH_FULL[viewMonth.getMonth()]} {viewMonth.getFullYear()}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))
+                              }
+                              className="rounded-md p-1 text-ink-400 transition-colors hover:bg-ink-50 hover:text-ink-700 cursor-pointer"
+                              aria-label="Next month"
                             >
-                              {d}
-                            </span>
-                          ))}
-                          {calendarCells.map((date) => {
-                            const key = toDateKey(date);
-                            const inMonth = date.getMonth() === viewMonth.getMonth();
-                            const isSelected = selectedDates.has(key);
-                            const isToday = key === todayKey;
-                            return (
-                              <button
-                                key={key}
-                                type="button"
-                                onClick={() => toggleDate(key, date)}
-                                className={cn(
-                                  "h-8 w-full rounded-md text-xs font-medium transition-colors cursor-pointer",
-                                  isSelected
-                                    ? "bg-accent-500 text-white hover:bg-accent-600"
-                                    : isToday
-                                      ? "bg-accent-50 text-accent-700 ring-1 ring-inset ring-accent-400 hover:bg-accent-100"
-                                      : inMonth
-                                        ? "text-ink-700 hover:bg-ink-50"
-                                        : "text-ink-300 hover:bg-ink-50"
-                                )}
-                              >
-                                {date.getDate()}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                          </div>
 
-                      <div className="mt-3 flex items-center justify-between gap-2 border-t border-ink-50 pt-3">
-                        <p className="min-w-0 truncate text-xs text-ink-500">
-                          {selectedKeys.length === 0
-                            ? "All dates"
-                            : selectedKeys.length === 1
-                              ? dateKeyShort(selectedKeys[0])
-                              : selectedKeys.length <= 3
-                                ? selectedKeys.map(dateKeyShort).join(", ")
-                                : `${selectedKeys.length} dates selected`}
-                        </p>
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={handleClearDates}
-                            disabled={selectedKeys.length === 0}
-                            className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-ink-500 transition-colors cursor-pointer hover:bg-ink-50 disabled:cursor-not-allowed disabled:text-ink-300"
-                          >
-                            Clear
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDatePopoverOpen(false)}
-                            className="rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors cursor-pointer hover:bg-accent-600"
-                          >
-                            Done
-                          </button>
-                        </div>
-                      </div>
+                          <div className="mt-2 grid grid-cols-7 gap-0.5">
+                            {WEEKDAY_LABELS.map((d) => (
+                              <span
+                                key={d}
+                                className="py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-ink-400"
+                              >
+                                {d}
+                              </span>
+                            ))}
+                            {calendarCells.map((date) => {
+                              const key = toDateKey(date);
+                              const inMonth = date.getMonth() === viewMonth.getMonth();
+                              const isSelected = selectedDates.has(key);
+                              const isToday = key === todayKey;
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onClick={() => toggleDate(key, date)}
+                                  className={cn(
+                                    "h-7 w-full rounded-md text-[11px] font-medium transition-colors cursor-pointer",
+                                    isSelected
+                                      ? "bg-accent-500 text-white hover:bg-accent-600"
+                                      : isToday
+                                        ? "bg-accent-50 text-accent-700 ring-1 ring-inset ring-accent-400 hover:bg-accent-100"
+                                        : inMonth
+                                          ? "text-ink-700 hover:bg-ink-50"
+                                          : "text-ink-300 hover:bg-ink-50"
+                                  )}
+                                >
+                                  {date.getDate()}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="mt-2 flex items-center justify-between gap-2 border-t border-ink-50 pt-2">
+                            <p className="min-w-0 truncate text-[11px] text-ink-500">
+                              {selectedKeys.length === 0
+                                ? "All dates"
+                                : selectedKeys.length === 1
+                                  ? dateKeyShort(selectedKeys[0])
+                                  : selectedKeys.length <= 3
+                                    ? selectedKeys.map(dateKeyShort).join(", ")
+                                    : `${selectedKeys.length} dates selected`}
+                            </p>
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={handleClearDates}
+                                disabled={selectedKeys.length === 0}
+                                className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-ink-500 transition-colors cursor-pointer hover:bg-ink-50 disabled:cursor-not-allowed disabled:text-ink-300"
+                              >
+                                Clear
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDatePopoverOpen(false)}
+                                className="rounded-lg bg-accent-500 px-3 py-1.5 text-[11px] font-semibold text-white transition-colors cursor-pointer hover:bg-accent-600"
+                              >
+                                Apply
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -529,7 +558,7 @@ export default function FollowupsModal({ isOpen, onClose }) {
                   <thead>
                     <tr className="bg-ink-50 border-b border-ink-100">
                       {["Quotation No", "Customer Name", "Next Followup Date", "Followup Status", "Followup Remark"].map((h) => (
-                        <th key={h} className="px-4 py-3 text-left font-semibold text-ink-600 whitespace-nowrap">
+                        <th key={h} className="px-5 py-4 text-left font-semibold text-ink-600 whitespace-nowrap">
                           {h}
                         </th>
                       ))}
@@ -541,19 +570,19 @@ export default function FollowupsModal({ isOpen, onClose }) {
                         key={`${record.quotationNo}-${idx}`}
                         className="border-b border-ink-50 transition-colors hover:bg-ink-50/50"
                       >
-                        <td className="px-4 py-3 font-mono text-xs font-semibold text-accent-600 whitespace-nowrap">
+                        <td className="px-5 py-4 font-mono text-xs font-semibold text-accent-600 whitespace-nowrap">
                           {record.quotationNo}
                         </td>
-                        <td className="px-4 py-3 max-w-[220px] truncate font-medium text-ink-900" title={record.customerName}>
+                        <td className="px-5 py-4 max-w-[220px] truncate font-medium text-ink-900" title={record.customerName}>
                           {record.customerName}
                         </td>
-                        <td className="px-4 py-3 text-ink-600 whitespace-nowrap">
+                        <td className="px-5 py-4 text-ink-600 whitespace-nowrap">
                           {formatDateCell(record.nextFollowupDate)}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className="px-5 py-4 whitespace-nowrap">
                           <StatusPill value={record.followupStatus} />
                         </td>
-                        <td className="px-4 py-3 max-w-[300px] truncate text-ink-600" title={record.followupRemark}>
+                        <td className="px-5 py-4 max-w-[300px] truncate text-ink-600" title={record.followupRemark}>
                           {record.followupRemark}
                         </td>
                       </tr>
