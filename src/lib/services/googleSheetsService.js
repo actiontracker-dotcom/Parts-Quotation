@@ -1174,6 +1174,20 @@ export async function buildQuotationRows(quotation, { quotationId, createdAt }) 
 export async function appendQuotation(quotation, meta) {
   const rows = await buildQuotationRows(quotation, meta);
 
+  const headers = dataHeadersCache || buildHeaderMap(DATA_SHEET_HEADERS);
+  const orderStatusIdx = headers["Order Status"];
+  if (orderStatusIdx !== undefined) {
+    for (const row of rows) {
+      if (row.length < orderStatusIdx + 1) {
+        row.length = orderStatusIdx + 1;
+        for (let i = 0; i < row.length; i++) {
+          if (row[i] === undefined) row[i] = "";
+        }
+      }
+      row[orderStatusIdx] = "Pending";
+    }
+  }
+
   console.time("sheets-append-quotation");
   await appendSheetRows(DATA_SHEET_TAB, rows);
   console.timeEnd("sheets-append-quotation");
