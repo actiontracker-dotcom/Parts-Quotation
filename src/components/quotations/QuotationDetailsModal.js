@@ -129,7 +129,6 @@ export default function QuotationDetailsModal({ quotationNo, onClose }) {
                   <InfoItem label="Party Ref. No." value={data.quotation.partyReferenceNumber} />
                   <InfoItem label="Party Ref. Date" value={formatDate(data.quotation.partyReferenceDate)} />
                   <InfoItem label="Follow-up By" value={data.quotation.quotationFollowUpBy} />
-                  <InfoItem label="Status" value={data.quotation.status} />
                 </div>
               </section>
 
@@ -201,8 +200,6 @@ export default function QuotationDetailsModal({ quotationNo, onClose }) {
                   <InfoItem label="Order Status" value={data.followup.orderStatus} />
                   <InfoItem label="Order Number" value={data.followup.orderNumber} />
                   <InfoItem label="Order Received Date" value={formatDate(data.followup.orderReceivedDate)} />
-                  <InfoItem label="Order Date" value={formatDate(data.followup.orderDate)} />
-                  <InfoItem label="Order Verification Status" value={data.followup.orderVerificationStatus} />
                   <div className="sm:col-span-2 lg:col-span-3">
                     <InfoItem label="Remark" value={data.followup.remarkForOrderReceived} />
                   </div>
