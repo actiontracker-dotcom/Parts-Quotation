@@ -11,6 +11,10 @@ import {
   ORDER_STATUS_OPTIONS,
 } from "@/lib/constants/quotationOptions";
 
+// Mirrors the authoritative set in googleSheetsService. UI-only protection —
+// the service-layer guard enforces the closed lifecycle on every request.
+const CLOSING_ORDER_STATUSES = new Set(["Won", "Loss", "Dead", "Partial"]);
+
 const EMPTY_NEXT_FORM = { nextFollowupDate: "", followupRemark: "" };
 const EMPTY_ORDER_FORM = {
   orderStatus: "",
@@ -19,7 +23,7 @@ const EMPTY_ORDER_FORM = {
   remarkForOrder: "",
 };
 
-export default function QuotationFollowupModal({ quotationNo, onClose, onDataChanged }) {
+export default function QuotationFollowupModal({ quotationNo, orderStatus = "", onClose, onDataChanged }) {
   const toast = useToast();
   const [view, setView] = useState("menu"); // "menu" | "next" | "order"
   const [nextForm, setNextForm] = useState(EMPTY_NEXT_FORM);
@@ -27,6 +31,8 @@ export default function QuotationFollowupModal({ quotationNo, onClose, onDataCha
   const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+
+  const isClosed = CLOSING_ORDER_STATUSES.has(String(orderStatus || "").trim());
 
   useEffect(() => {
     function handleEscape(e) {
@@ -129,6 +135,13 @@ export default function QuotationFollowupModal({ quotationNo, onClose, onDataCha
   async function submitNext(e) {
     e.preventDefault();
     if (saving) return; // ignore duplicate submits while one is in flight
+
+    // UX-only guard for stale UI state. The authoritative lifecycle check lives
+    // in the service layer (returns reason:"closed" -> HTTP 409).
+    if (isClosed) {
+      setSubmitError(`Follow-up is closed because the order status is ${orderStatus}.`);
+      return;
+    }
 
     setSubmitError(null);
     setFieldErrors({});
@@ -245,18 +258,39 @@ export default function QuotationFollowupModal({ quotationNo, onClose, onDataCha
           <p className="text-sm text-ink-600 mb-5">Quotation: {quotationNo}</p>
 
           {view === "menu" && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Button variant="primary" icon={CalendarPlus} onClick={() => setView("next")}>
-                Next Follow-up
-              </Button>
-              <Button variant="secondary" icon={PackageCheck} onClick={() => setView("order")}>
-                Order Status
-              </Button>
+            <div className="space-y-4">
+              {isClosed && (
+                <p className="rounded-md bg-ink-50 px-3 py-2 text-sm text-ink-600">
+                  Follow-up is closed because the order status is {orderStatus}.
+                </p>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {!isClosed && (
+                  <Button variant="primary" icon={CalendarPlus} onClick={() => setView("next")}>
+                    Next Follow-up
+                  </Button>
+                )}
+                <Button variant="secondary" icon={PackageCheck} onClick={() => setView("order")}>
+                  Order Status
+                </Button>
+              </div>
             </div>
           )}
 
-          {view === "next" && (
-            <form onSubmit={submitNext} className="space-y-4">
+          {view === "next" &&
+            (isClosed ? (
+              <div className="space-y-4">
+                <p className="text-sm font-medium text-danger-500">
+                  Follow-up is closed because the order status is {orderStatus}.
+                </p>
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <Button variant="secondary" type="button" onClick={backToMenu}>
+                    Back
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={submitNext} className="space-y-4">
               <Input
                 label="Next Follow-up Date"
                 required
@@ -288,7 +322,7 @@ export default function QuotationFollowupModal({ quotationNo, onClose, onDataCha
                 </Button>
               </div>
             </form>
-          )}
+            ))}
 
           {view === "order" && (
             <form onSubmit={submitOrder} className="space-y-4">

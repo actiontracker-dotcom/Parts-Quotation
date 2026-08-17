@@ -1818,8 +1818,23 @@ async function completePendingFollowupsForQuotation(quotationNo) {
   }
 }
 
+// Order Status values that close the quotation's follow-up lifecycle. When the
+// CURRENT Data-sheet Order Status is one of these, creating a new Next
+// Follow-up is forbidden (enforced in updateQuotationNextFollowup) and the
+// Data-sheet workflow mirrors are cleared (enforced in
+// updateQuotationOrderStatus). Order Status itself remains changeable, so the
+// lifecycle reopens when the current status leaves this set (e.g. Loss -> Won).
+const CLOSING_ORDER_STATUSES = new Set(["Won", "Loss", "Dead", "Partial"]);
+
 /**
  * Records a "Next Follow-up" submission.
+ *
+ * Guard: the quotation's CURRENT Data-sheet Order Status is checked first. When
+ * it is Won / Loss / Dead / Partial the follow-up lifecycle is closed and this
+ * function returns { success:false, reason:"closed", orderStatus } WITHOUT any
+ * write — no Data-sheet update, no Number-of-Followup increment, no Followup
+ * Form append, no history completion. The guard is state-based: Loss -> Won
+ * reopens the quotation for follow-ups and Won -> Loss closes it again.
  *
  * 1. Updates the Data-sheet quotation (by "Quotation No"):
  *    - "Next Followup date"  <- submitted date
@@ -1839,6 +1854,16 @@ async function completePendingFollowupsForQuotation(quotationNo) {
  * caller receives success:false and no success message is sent to the user.
  */
 export async function updateQuotationNextFollowup(quotationNo, data) {
+  const currentQuotation = await getQuotationByNo(quotationNo);
+  if (!currentQuotation) {
+    return { success: false, reason: "not-found" };
+  }
+
+  const currentOrderStatus = String(currentQuotation.followup?.orderStatus || "").trim();
+  if (CLOSING_ORDER_STATUSES.has(currentOrderStatus)) {
+    return { success: false, reason: "closed", orderStatus: currentOrderStatus };
+  }
+
   const timestamp = new Date().toISOString();
 
   const dataResult = await updateQuotationDataFieldsByNo(quotationNo, (rows, headers, idxs) => {
@@ -1874,9 +1899,6 @@ export async function updateQuotationNextFollowup(quotationNo, data) {
   }
 }
 
-// Order Status values that close the quotation's current Pending Next Follow-up.
-const CLOSING_ORDER_STATUSES = new Set(["Won", "Loss", "Dead", "Partial"]);
-
 /**
  * Records an "Order Status" submission.
  *
@@ -1885,11 +1907,13 @@ const CLOSING_ORDER_STATUSES = new Set(["Won", "Loss", "Dead", "Partial"]);
  *    - "Order Number"             <- submitted order number
  *    - "Order received Date"      <- submitted order received date
  *    - "Remark for Order Received" <- submitted remark
- * 2. When the submitted Order Status is Won / Loss / Dead / Partial, closes the
- *    quotation's current Pending Next Follow-up in the history sheet by setting
- *    its "Followup Status" to "Completed" (the row is kept, never deleted). If
- *    there is no current Pending follow-up, nothing is changed. Already
- *    Completed history and unrelated records are never touched.
+ * 2. When the submitted Order Status is Won / Loss / Dead / Partial (terminal)
+ *    the follow-up lifecycle closes: the Data-sheet workflow mirrors "Order
+ *    Follow-up Summary", "Next Followup date" and "Next followup Status" are
+ *    cleared, and the quotation's current Pending Next Follow-up in the history
+ *    sheet is set to "Completed" (the row is kept, never deleted). If there is
+ *    no current Pending follow-up, nothing is changed. Already Completed
+ *    history and unrelated records are never touched.
  * 3. Appends ONE history row to "Followup Form for Quotation"
  *    (Submission Type = "Order Status"). The appended row always keeps "Next
  *    Followup Date" and "Followup Status" blank — the Order Status row itself
@@ -1901,18 +1925,31 @@ const CLOSING_ORDER_STATUSES = new Set(["Won", "Loss", "Dead", "Partial"]);
 export async function updateQuotationOrderStatus(quotationNo, data) {
   const timestamp = new Date().toISOString();
 
-  const dataResult = await updateQuotationDataFieldsByNo(quotationNo, () => ({
-    "Order Status": data.orderStatus || "",
-    "Order Number": data.orderNumber || "",
-    "Order received Date": toSheetDate(data.orderReceivedDate || ""),
-    "Remark for Order Received": data.remarkForOrder || "",
-  }));
+  const isClosing = CLOSING_ORDER_STATUSES.has(String(data.orderStatus || "").trim());
+
+  const dataResult = await updateQuotationDataFieldsByNo(quotationNo, () => {
+    const fields = {
+      "Order Status": data.orderStatus || "",
+      "Order Number": data.orderNumber || "",
+      "Order received Date": toSheetDate(data.orderReceivedDate || ""),
+      "Remark for Order Received": data.remarkForOrder || "",
+    };
+    // Terminal statuses close the follow-up lifecycle. Clear the Data-sheet
+    // workflow mirrors so the sheet no longer advertises a Pending next
+    // follow-up. Number of Followup (column 45) is intentionally preserved.
+    if (isClosing) {
+      fields["Order Follow-up Summary"] = "";
+      fields["Next Followup date"] = "";
+      fields["Next followup Status"] = "";
+    }
+    return fields;
+  });
 
   if (!dataResult.success) return dataResult;
 
   try {
     // Close the current Pending Next Follow-up for terminal order statuses.
-    if (CLOSING_ORDER_STATUSES.has(String(data.orderStatus || "").trim())) {
+    if (isClosing) {
       await completePendingFollowupsForQuotation(quotationNo);
     }
 
@@ -1933,4 +1970,92 @@ export async function updateQuotationOrderStatus(quotationNo, data) {
     );
     return { success: false, reason: "history-failed" };
   }
+}
+
+/**
+ * SAFE stale-data repair for the closed follow-up lifecycle.
+ *
+ * Detects terminal quotations (Order Status Won / Loss / Dead / Partial) whose
+ * Data-sheet "Next followup Status" still reads "Pending" and repairs ONLY the
+ * records that are provably safe:
+ *
+ * - safeToRepair: terminal AND Data "Next followup Status" == "Pending" AND the
+ *   Followup Form contains ZERO "Next Follow-up" rows with Followup Status
+ *   "Pending". Their mirror fields ("Order Follow-up Summary", "Next Followup
+ *   date", "Next followup Status") are cleared via updateQuotationDataFieldsByNo.
+ *   "Number of Followup", Order Status, order fields and the FUP history are
+ *   left untouched.
+ * - ambiguous: terminal AND Data "Next followup Status" == "Pending" but at
+ *   least one genuinely Pending "Next Follow-up" FUP row exists. NEVER repaired
+ *   automatically — a business decision is required.
+ * - informational: terminal quotations whose Data "Next followup Status" is not
+ *   "Pending". Nothing to do.
+ *
+ * This helper is EXPLICITLY NOT wired to any route or startup path. It must be
+ * invoked deliberately (e.g. a one-off maintenance call) after reviewing the
+ * returned classification report.
+ */
+export async function repairStaleTerminalWorkflowFields() {
+  const rows = await readSheetRange(DATA_SHEET_TAB, null);
+  const emptyReport = { safeToRepair: [], ambiguous: [], informational: [] };
+  if (!rows || rows.length < 2) return emptyReport;
+
+  const headers = buildHeaderMap(rows[0]);
+
+  const pendingFupCountByQuotation = new Map();
+  for (const record of await readFollowupFormRecords()) {
+    const quotationNo = String(record["Quotation No"] || "").trim();
+    if (!quotationNo) continue;
+    if (String(record["Submission Type"] || "").trim() !== "Next Follow-up") continue;
+    if (String(record["Followup Status"] || "").trim() !== "Pending") continue;
+    pendingFupCountByQuotation.set(
+      quotationNo,
+      (pendingFupCountByQuotation.get(quotationNo) || 0) + 1
+    );
+  }
+
+  const terminalPending = new Map();
+  const informational = [];
+  const informationalSeen = new Set();
+  for (let i = 1; i < rows.length; i++) {
+    const quotationNo = getCellValue(rows[i], headers, "Quotation No");
+    if (!quotationNo) continue;
+
+    const orderStatus = String(getCellValue(rows[i], headers, "Order Status") || "").trim();
+    if (!CLOSING_ORDER_STATUSES.has(orderStatus)) continue;
+
+    const nextStatus = String(getCellValue(rows[i], headers, "Next followup Status") || "").trim();
+    if (nextStatus !== "Pending") {
+      if (!informationalSeen.has(quotationNo)) {
+        informationalSeen.add(quotationNo);
+        informational.push({ quotationNo, orderStatus, nextFollowupStatus: nextStatus });
+      }
+      continue;
+    }
+
+    if (!terminalPending.has(quotationNo)) {
+      terminalPending.set(quotationNo, orderStatus);
+    }
+  }
+
+  const safeToRepair = [];
+  const ambiguous = [];
+  for (const [quotationNo, orderStatus] of terminalPending) {
+    const pendingFollowupCount = pendingFupCountByQuotation.get(quotationNo) || 0;
+    if (pendingFollowupCount === 0) {
+      safeToRepair.push({ quotationNo, orderStatus });
+    } else {
+      ambiguous.push({ quotationNo, orderStatus, pendingFollowupCount });
+    }
+  }
+
+  for (const { quotationNo } of safeToRepair) {
+    await updateQuotationDataFieldsByNo(quotationNo, () => ({
+      "Order Follow-up Summary": "",
+      "Next Followup date": "",
+      "Next followup Status": "",
+    }));
+  }
+
+  return { safeToRepair, ambiguous, informational };
 }

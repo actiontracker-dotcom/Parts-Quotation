@@ -15,6 +15,21 @@ import QuotationDetailsModal from "@/components/quotations/QuotationDetailsModal
 import QuotationFollowupModal from "@/components/quotations/QuotationFollowupModal";
 import QuotationFilterBar from "@/components/quotations/QuotationFilterBar";
 
+// Mirrors the authoritative set in googleSheetsService. UI-only protection —
+// the service-layer guard enforces the closed follow-up lifecycle.
+const CLOSING_ORDER_STATUSES = new Set(["Won", "Loss", "Dead", "Partial"]);
+
+// Order Status badge colors (pure UI). Exact hex values via arbitrary-value
+// classes — the theme overrides the default amber palette, so named colors
+// would not match. Layout/pill classes stay untouched on the badge element.
+const ORDER_STATUS_BADGE_COLORS = {
+  Pending: "bg-[#FEF3C7] text-[#92400E]",
+  Won: "bg-[#DCFCE7] text-[#166534]",
+  Loss: "bg-[#FEE2E2] text-[#991B1B]",
+  Dead: "bg-[#F3F4F6] text-[#4B5563]",
+  Partial: "bg-[#FFEDD5] text-[#9A3412]",
+};
+
 // Robust local-calendar parser for the "Quotation Date" field. Handles the
 // YYYY-MM-DD value written by the date input plus common legacy formats that
 // may already exist in the sheet (DD/MM/YYYY, DD-MM-YYYY). Returns null when
@@ -456,7 +471,7 @@ export default function QuotationsPage() {
                         {q.numberOfFollowup || "-"}
                       </td>
                       <td className="px-4 py-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent-50 text-accent-700">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ORDER_STATUS_BADGE_COLORS[q.orderStatus] || "bg-accent-50 text-accent-700"}`}>
                           {q.orderStatus || "-"}
                         </span>
                       </td>
@@ -481,7 +496,11 @@ export default function QuotationsPage() {
                               setFollowUpQuotationNo(q.quotationNo);
                             }}
                             className="p-1.5 rounded-md text-green-600 hover:text-green-700 hover:bg-green-50 transition-colors cursor-pointer"
-                            title="Next Follow-up"
+                            title={
+                              CLOSING_ORDER_STATUSES.has(String(q.orderStatus || "").trim())
+                                ? "Follow-up closed — update Order Status"
+                                : "Next Follow-up"
+                            }
                           >
                             <Calendar className="h-4 w-4" />
                           </button>
@@ -506,6 +525,9 @@ export default function QuotationsPage() {
       {followUpQuotationNo && (
         <QuotationFollowupModal
           quotationNo={followUpQuotationNo}
+          orderStatus={
+            quotations.find((q) => q.quotationNo === followUpQuotationNo)?.orderStatus || ""
+          }
           onClose={() => setFollowUpQuotationNo(null)}
           onDataChanged={loadQuotations}
         />

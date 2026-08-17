@@ -125,6 +125,17 @@ export async function POST(request, { params }) {
       });
 
       if (!result.success) {
+        if (result.reason === "closed") {
+          return NextResponse.json(
+            {
+              success: false,
+              message: `Follow-up is closed for this quotation because the order status is ${result.orderStatus}.`,
+              errors: { lifecycle: "closed" },
+            },
+            { status: 409 }
+          );
+        }
+
         const status = result.reason === "not-found" ? 404 : result.reason === "history-failed" ? 502 : 400;
         return NextResponse.json(
           {
