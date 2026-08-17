@@ -124,6 +124,7 @@ export async function GET(request) {
       return {
         quotationNo,
         customerName: quotation?.customerName || "",
+        orderStatus: quotation?.orderStatus || "",
         nextFollowupDate: record["Next Followup Date"] || "",
         followupStatus: record["Followup Status"] || "",
         followupRemark: record["Followup Remark"] || "",

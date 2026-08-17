@@ -559,6 +559,7 @@ export default function DashboardPage() {
         <FollowupsModal
           isOpen={showFollowups}
           onClose={() => setShowFollowups(false)}
+          onDataChanged={() => setReloadToken((t) => t + 1)}
         />
       )}
 

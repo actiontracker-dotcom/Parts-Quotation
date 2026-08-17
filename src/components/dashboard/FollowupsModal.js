@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
+import QuotationFollowupModal from "@/components/quotations/QuotationFollowupModal";
 import { cn } from "@/lib/utils/cn";
 import { parseQuotationDate, toDateKey, addDays, startOfWeek } from "@/lib/utils/dateUtils";
 
@@ -137,7 +138,7 @@ function presetDates(id, now) {
   }
 }
 
-export default function FollowupsModal({ isOpen, onClose }) {
+export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
   const [mounted, setMounted] = useState(false);
   const [status, setStatus] = useState("Pending");
   const [selectedDates, setSelectedDates] = useState(() => new Set());
@@ -146,6 +147,7 @@ export default function FollowupsModal({ isOpen, onClose }) {
   const [customMode, setCustomMode] = useState(false);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
   const [page, setPage] = useState(1);
+  const [followUpRecord, setFollowUpRecord] = useState(null);
 
   const [records, setRecords] = useState(null);
   const [pagination, setPagination] = useState(null);
@@ -169,6 +171,7 @@ export default function FollowupsModal({ isOpen, onClose }) {
     setViewMonth(startOfMonth(new Date()));
     setDatePopoverOpen(false);
     setCustomMode(false);
+    setFollowUpRecord(null);
   }, [isOpen]);
 
   // When the popover closes, reset to the preset view so the calendar is not
@@ -180,6 +183,7 @@ export default function FollowupsModal({ isOpen, onClose }) {
   useEffect(() => {
     function handleEscape(e) {
       if (e.key !== "Escape" || !isOpen) return;
+      if (followUpRecord) return;
       if (datePopoverOpen) {
         setDatePopoverOpen(false);
         return;
@@ -188,7 +192,7 @@ export default function FollowupsModal({ isOpen, onClose }) {
     }
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [isOpen, onClose, datePopoverOpen]);
+  }, [isOpen, onClose, datePopoverOpen, followUpRecord]);
 
   useEffect(() => {
     if (!datePopoverOpen) return;
@@ -557,7 +561,7 @@ export default function FollowupsModal({ isOpen, onClose }) {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-ink-50 border-b border-ink-100">
-                      {["Quotation No", "Customer Name", "Next Followup Date", "Followup Status", "Followup Remark"].map((h) => (
+                      {["Quotation No", "Customer Name", "Next Followup Date", "Followup Status", "Followup Remark", "Action"].map((h) => (
                         <th key={h} className="px-5 py-4 text-left font-semibold text-ink-600 whitespace-nowrap">
                           {h}
                         </th>
@@ -584,6 +588,17 @@ export default function FollowupsModal({ isOpen, onClose }) {
                         </td>
                         <td className="px-5 py-4 max-w-[300px] truncate text-ink-600" title={record.followupRemark}>
                           {record.followupRemark}
+                        </td>
+                        <td className="px-5 py-4 text-center whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => setFollowUpRecord(record)}
+                            className="p-1.5 rounded-md text-green-600 hover:text-green-700 hover:bg-green-50 transition-colors cursor-pointer"
+                            title="Next Follow-up"
+                            aria-label={`Next Follow-up for ${record.quotationNo}`}
+                          >
+                            <Calendar className="h-4 w-4" />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -662,6 +677,18 @@ export default function FollowupsModal({ isOpen, onClose }) {
           </Button>
         </div>
       </div>
+
+      {followUpRecord && (
+        <QuotationFollowupModal
+          quotationNo={followUpRecord.quotationNo}
+          orderStatus={followUpRecord.orderStatus || ""}
+          onClose={() => setFollowUpRecord(null)}
+          onSuccess={() => {
+            load(status, selectedDates, page);
+            onDataChanged?.();
+          }}
+        />
+      )}
     </div>
   );
 }

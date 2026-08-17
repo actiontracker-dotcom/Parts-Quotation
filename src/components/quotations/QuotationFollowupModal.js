@@ -23,7 +23,7 @@ const EMPTY_ORDER_FORM = {
   remarkForOrder: "",
 };
 
-export default function QuotationFollowupModal({ quotationNo, orderStatus = "", onClose, onDataChanged }) {
+export default function QuotationFollowupModal({ quotationNo, orderStatus = "", onClose, onDataChanged, onSuccess }) {
   const toast = useToast();
   const [view, setView] = useState("menu"); // "menu" | "next" | "order"
   const [nextForm, setNextForm] = useState(EMPTY_NEXT_FORM);
@@ -184,8 +184,9 @@ export default function QuotationFollowupModal({ quotationNo, orderStatus = "", 
       }
       setNextForm(EMPTY_NEXT_FORM);
       setFieldErrors({});
-      backToMenu();
       await refreshQuotationList();
+      onSuccess?.();
+      onClose();
     }
   }
 
@@ -227,6 +228,7 @@ export default function QuotationFollowupModal({ quotationNo, orderStatus = "", 
         console.error("Order status saved, but the success toast failed:", uiError);
       }
       await refreshQuotationList();
+      onSuccess?.();
       onClose();
     }
   }
