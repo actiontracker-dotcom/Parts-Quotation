@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
-import { loadQuotations, getCurrentPendingFollowupRecords } from "@/lib/services/googleSheetsService";
-import {
-  parseQuotationDate,
-  toDateKey,
-  startOfWeek,
-  isoWeekInfo,
-} from "@/lib/utils/dateUtils";
+import { getCurrentPendingFollowupRecords } from "@/lib/services/googleSheetsService";
+import { parseQuotationDate, toDateKey, startOfWeek, isoWeekInfo } from "@/lib/utils/dateUtils";
+import { loadDashboardQuotations, PENDING_STATUS, normalizeOrderStatus } from "@/lib/server/dashboard";
 
 // The dashboard aggregation runs server-side on every request. It reuses the
 // exact same Google Sheets read as the quotations list (one full range read via
@@ -19,16 +15,6 @@ const NO_STORE_HEADERS = { "Cache-Control": "no-store, max-age=0, must-revalidat
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-// Pending is the canonical in-funnel status stored in the sheet. New quotations
-// are written with "Order Status = Pending", and blank Order Status rows
-// (legacy) also represent quotations still in the funnel.
-const PENDING_STATUS = "Pending";
-
-function normalizeOrderStatus(raw) {
-  const v = String(raw || "").trim();
-  return v ? v : PENDING_STATUS;
-}
-
 function shortDate(date) {
   return `${DAY_SHORT[date.getDay()]} ${date.getDate()} ${MONTH_SHORT[date.getMonth()]}`;
 }
@@ -41,39 +27,29 @@ function quarterLabel(date) {
   return `Q${Math.floor(date.getMonth() / 3) + 1} ${String(date.getFullYear()).slice(-2)}`;
 }
 
-function hourLabel(date) {
-  const h = date.getHours();
-  if (h === 0) return "12 AM";
-  if (h === 12) return "12 PM";
-  return h < 12 ? `${h} AM` : `${h - 12} PM`;
-}
-
 function pct(part, total) {
   if (!total) return 0;
   return Math.round((part / total) * 1000) / 10;
 }
 
 // Choose a sensible time-bucket for the trend chart based on the width of the
-// range being plotted, so "Today" never renders 30+ day bars and "All Time"
-// never renders hundreds of bars.
+// range being plotted. The smallest bucket is a DAY: the sheet stores
+// date-only values, so an hourly bucket would collapse every quotation of a
+// day onto a single "12 AM" point. This keeps "All Time" to a few dozen bars
+// while "This Month" stays day-granular.
 function chooseBucket(days) {
-  if (days <= 1) return "hour";
   if (days <= 62) return "day";
   if (days <= 550) return "month";
   return "quarter";
 }
 
 function bucketLabel(bucket, date) {
-  if (bucket === "hour") return hourLabel(date);
   if (bucket === "day") return shortDate(date);
   if (bucket === "month") return monthLabel(date);
   return quarterLabel(date);
 }
 
 function bucketKey(bucket, date) {
-  if (bucket === "hour") {
-    return `${toDateKey(date)}|${date.getHours()}`;
-  }
   if (bucket === "day") return toDateKey(date);
   if (bucket === "month") {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -90,20 +66,15 @@ export async function GET(request) {
     const orderStatusFilter = searchParams.get("orderStatus") || "";
     const enquiryGeneratedByFilter = searchParams.get("enquiryGeneratedBy") || "";
 
-    const { quotations, detailMap } = await loadQuotations();
-
-    const quotationMap = new Map();
-    for (const q of quotations) quotationMap.set(q.quotationNo, q);
-
-    // Source Of Enquiry lives on the detail map (first row of each quotation).
-    const enriched = quotations.map((q) => {
-      const items = detailMap.get(q.quotationNo);
-      const source = items && items.length > 0 ? (items[0]._quotation || {}).sourceOfEnquiry : "";
-      return {
-        ...q,
-        sourceOfEnquiry: String(source || "").trim(),
-        parsedDate: parseQuotationDate(q.quotationDate),
-      };
+    // Same filtered dataset that every drill-down page uses (shared loader in
+    // src/lib/server/dashboard.js) — dashboard figures and click details can
+    // never diverge.
+    const { list, enriched } = await loadDashboardQuotations({
+      division: divisionFilter,
+      orderStatus: orderStatusFilter,
+      enquiryGeneratedBy: enquiryGeneratedByFilter,
+      from: fromParam,
+      to: toParam,
     });
 
     // Filter metadata (dropdowns) comes from the full dataset so options never
@@ -123,35 +94,6 @@ export async function GET(request) {
       allDivisions.push(...divSet);
       allSources.push(...srcSet);
       allEngineers.push(...engSet);
-    }
-
-    let list = enriched;
-
-    if (divisionFilter) {
-      list = list.filter((q) => (q.division || "").trim() === divisionFilter);
-    }
-
-    if (orderStatusFilter) {
-      list = list.filter((q) => normalizeOrderStatus(q.orderStatus) === orderStatusFilter);
-    }
-
-    if (enquiryGeneratedByFilter) {
-      list = list.filter((q) => (q.engineer || "").trim() === enquiryGeneratedByFilter);
-    }
-
-    // Date range filtering uses inclusive day bounds exactly like the quotations
-    // list page, so "This Month" and custom ranges behave identically.
-    let dateRange = { from: null, to: null };
-    if (fromParam) dateRange.from = parseQuotationDate(fromParam);
-    if (toParam) dateRange.to = parseQuotationDate(toParam);
-
-    if (dateRange.from || dateRange.to) {
-      list = list.filter((q) => {
-        if (!q.parsedDate) return false;
-        if (dateRange.from && q.parsedDate < dateRange.from) return false;
-        if (dateRange.to && q.parsedDate > dateRange.to) return false;
-        return true;
-      });
     }
 
     // ── Summary ───────────────────────────────────────────────────────────────
@@ -210,8 +152,10 @@ export async function GET(request) {
       .map((s) => ({ status: s, count: byStatus[s], amount: byStatusAmount[s] }));
 
     // ── Date / trend (adaptive buckets) ───────────────────────────────────────
-    let trendStart = dateRange.from;
-    let trendEnd = dateRange.to;
+    const fromDate = fromParam ? parseQuotationDate(fromParam) : null;
+    const toDate = toParam ? parseQuotationDate(toParam) : null;
+    let trendStart = fromDate;
+    let trendEnd = toDate;
     if (!trendStart || !trendEnd) {
       for (const q of list) {
         if (!q.parsedDate) continue;
@@ -227,7 +171,14 @@ export async function GET(request) {
       for (const q of list) {
         if (!q.parsedDate) continue;
         const key = bucketKey(bucket, q.parsedDate);
-        if (!buckets.has(key)) buckets.set(key, { label: bucketLabel(bucket, q.parsedDate), count: 0, amount: 0 });
+        if (!buckets.has(key))
+          buckets.set(key, {
+            label: bucketLabel(bucket, q.parsedDate),
+            bucket,
+            key,
+            count: 0,
+            amount: 0,
+          });
         const entry = buckets.get(key);
         entry.count += 1;
         entry.amount += Number(q.totalAmount) || 0;
@@ -237,49 +188,6 @@ export async function GET(request) {
       for (const key of orderedKeys) {
         byDate.push(buckets.get(key));
       }
-    }
-
-    // ── Source Of Enquiry ─────────────────────────────────────────────────────
-    const sourceMap = new Map();
-    for (const q of list) {
-      const s = q.sourceOfEnquiry || "Unspecified";
-      if (!sourceMap.has(s)) sourceMap.set(s, { source: s, count: 0, amount: 0 });
-      const entry = sourceMap.get(s);
-      entry.count += 1;
-      entry.amount += Number(q.totalAmount) || 0;
-    }
-    const bySourceOfEnquiry = Array.from(sourceMap.values())
-      .map((e) => ({ ...e, percentage: pct(e.count, list.length) }))
-      .sort((a, b) => b.amount - a.amount);
-
-    // ── Engineer (Top 10 + Others) ────────────────────────────────────────────
-    const engineerMap = new Map();
-    for (const q of list) {
-      const eng = (q.engineer || "").trim() || "Unspecified";
-      if (!engineerMap.has(eng)) engineerMap.set(eng, { engineer: eng, count: 0, amount: 0 });
-      const entry = engineerMap.get(eng);
-      entry.count += 1;
-      entry.amount += Number(q.totalAmount) || 0;
-    }
-    const engineers = Array.from(engineerMap.values()).sort((a, b) => b.amount - a.amount);
-    const byEngineer = [];
-    let othersCount = 0;
-    let othersAmount = 0;
-    engineers.forEach((e, i) => {
-      if (i < 10) {
-        byEngineer.push({ ...e, percentage: pct(e.count, list.length) });
-      } else {
-        othersCount += e.count;
-        othersAmount += e.amount;
-      }
-    });
-    if (othersCount > 0) {
-      byEngineer.push({
-        engineer: "Others",
-        count: othersCount,
-        amount: othersAmount,
-        percentage: pct(othersCount, list.length),
-      });
     }
 
     // ── Weekly performance (Monday-start weeks, aligned with the app) ─────────
@@ -316,6 +224,9 @@ export async function GET(request) {
         return {
           label: entry.label,
           week: entry.week,
+          // Canonical Monday start-of-week key. The drill-down filter matches
+          // `weekKey === dateKey`, so this field MUST be present on the payload.
+          dateKey: key,
           count: entry.count,
           amount: entry.amount,
           divisions: Array.from(entry.divisions.values()).sort((a, b) => b.count - a.count),
@@ -337,20 +248,6 @@ export async function GET(request) {
         totalAmount: Number(q.totalAmount) || 0,
       }));
 
-    // ── Top customers ─────────────────────────────────────────────────────────
-    const customerMap = new Map();
-    for (const q of list) {
-      const name = (q.customerName || "").trim();
-      if (!name) continue;
-      if (!customerMap.has(name)) customerMap.set(name, { customerName: name, count: 0, amount: 0 });
-      const entry = customerMap.get(name);
-      entry.count += 1;
-      entry.amount += Number(q.totalAmount) || 0;
-    }
-    const topCustomers = Array.from(customerMap.values())
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5);
-
     // ── Pending Follow-ups KPI ────────────────────────────────────────────────
     // TOTAL current Pending follow-ups across ALL dates (past, today and future)
     // — one per quotation via the shared current-Pending business rule.
@@ -368,11 +265,8 @@ export async function GET(request) {
           byDivision,
           byOrderStatus,
           byDate,
-          bySourceOfEnquiry,
-          byEngineer,
           weeklyTrend,
           recentQuotations,
-          topCustomers,
           pendingFollowupCount,
           filters: {
             divisions: allDivisions.sort(),

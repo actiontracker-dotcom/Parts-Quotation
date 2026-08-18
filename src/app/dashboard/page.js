@@ -24,11 +24,11 @@ import {
   TrendChart,
   BarChart,
   StackedBarChart,
-  HBarChart,
   DonutChart,
   CHART_COLORS,
 } from "@/components/dashboard/charts";
 import FollowupsModal from "@/components/dashboard/FollowupsModal";
+import QuotationDrilldownModal from "@/components/dashboard/QuotationDrilldownModal";
 import DashboardFilterBar from "@/components/dashboard/DashboardFilterBar";
 
 const DEFAULT_FILTERS = {
@@ -106,6 +106,7 @@ export default function DashboardPage() {
   const [me, setMe] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [showFollowups, setShowFollowups] = useState(false);
+  const [drilldown, setDrilldown] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,6 +154,76 @@ export default function DashboardPage() {
     return params.toString();
   }, [filters]);
 
+  // ── Chart drill-down ────────────────────────────────────────────────────────
+  // Every chart opens the same reusable, paginated modal. The modal fetches the
+  // matching records from /api/dashboard/drilldown, which pages over the SAME
+  // filtered dataset as the visible figures. The base query combines the active
+  // dashboard filters with the clicked selection (type + selection params) so a
+  // drill-down opened from a filtered dashboard is scoped to those filters too.
+  const openDrilldown = useCallback(
+    (title, selectionParams) => {
+      setDrilldown({ title, baseQuery: query ? `${query}&${selectionParams}` : selectionParams });
+    },
+    [query]
+  );
+
+  const handleTrendClick = useCallback(
+    (i) => {
+      const bucket = data && data.byDate ? data.byDate[i] : null;
+      if (!bucket) return;
+      openDrilldown(
+        `Quotations — ${bucket.label}`,
+        `type=trend&bucket=${encodeURIComponent(bucket.bucket)}&bucketKey=${encodeURIComponent(bucket.key)}`
+      );
+    },
+    [data, openDrilldown]
+  );
+
+  const handleStatusClick = useCallback(
+    (seg) => {
+      openDrilldown(`Quotations — ${seg.label}`, `type=status&selStatus=${encodeURIComponent(seg.label)}`);
+    },
+    [openDrilldown]
+  );
+
+  const handleDivisionClick = useCallback(
+    (d) => {
+      openDrilldown(`Quotations — ${d.label}`, `type=division&selDivision=${encodeURIComponent(d.label)}`);
+    },
+    [openDrilldown]
+  );
+
+  const handleWeeklyBarClick = useCallback(
+    (w) => {
+      openDrilldown(
+        `Quotations — ${w.label} · ${w.week}`,
+        `type=weekly&week=${encodeURIComponent(w.dateKey)}`
+      );
+    },
+    [openDrilldown]
+  );
+
+  const handleWeeklySegmentClick = useCallback(
+    (w, d) => {
+      openDrilldown(
+        `Quotations — ${w.label} · ${d.name}`,
+        `type=weekly&week=${encodeURIComponent(w.dateKey)}&segment=${encodeURIComponent(d.name)}`
+      );
+    },
+    [openDrilldown]
+  );
+
+  const handleAllClick = useCallback(() => {
+    openDrilldown("All Quotations", "type=all");
+  }, [openDrilldown]);
+
+  const handleStatusAllClick = useCallback(
+    (status) => {
+      openDrilldown(`Quotations — ${status}`, `type=status&selStatus=${encodeURIComponent(status)}`);
+    },
+    [openDrilldown]
+  );
+
   useEffect(() => {
     if (query === null) return;
     let cancelled = false;
@@ -191,6 +262,8 @@ export default function DashboardPage() {
         sub: `₹ ${formatCurrency(s.totalAmount)} total value`,
         icon: ClipboardList,
         tint: "bg-accent-50 text-accent-600",
+        onClick: handleAllClick,
+        clickable: true,
       },
       {
         label: "Total Amount",
@@ -198,6 +271,8 @@ export default function DashboardPage() {
         sub: `across ${s.totalQuotations} quotations`,
         icon: IndianRupee,
         tint: "bg-teal-50 text-teal-600",
+        onClick: handleAllClick,
+        clickable: true,
       },
       {
         label: "Won",
@@ -205,6 +280,8 @@ export default function DashboardPage() {
         sub: `${formatCompactCurrency(s.wonAmount)} won value`,
         icon: Trophy,
         tint: "bg-teal-50 text-teal-600",
+        onClick: () => handleStatusAllClick("Won"),
+        clickable: true,
       },
       {
         label: "Pending",
@@ -212,6 +289,8 @@ export default function DashboardPage() {
         sub: `${formatCompactCurrency(s.openAmount)} in pipeline`,
         icon: Clock,
         tint: "bg-amber-50 text-amber-600",
+        onClick: () => handleStatusAllClick("Pending"),
+        clickable: true,
       },
       {
         label: "Conversion Rate",
@@ -219,6 +298,8 @@ export default function DashboardPage() {
         sub: "won ÷ total quotations",
         icon: Percent,
         tint: "bg-accent-50 text-accent-600",
+        onClick: handleAllClick,
+        clickable: true,
       },
       {
         label: "Pending Follow-ups",
@@ -230,7 +311,7 @@ export default function DashboardPage() {
         clickable: true,
       },
     ];
-  }, [data]);
+  }, [data, handleAllClick, handleStatusAllClick]);
 
   const charts = useMemo(() => {
     if (!data) return null;
@@ -239,6 +320,8 @@ export default function DashboardPage() {
       label: d.label,
       count: d.count,
       amount: d.amount,
+      bucket: d.bucket,
+      key: d.key,
     }));
 
     const statusData = (data.byOrderStatus || []).map((d) => ({
@@ -253,39 +336,16 @@ export default function DashboardPage() {
       percentage: pct(d.amount, divisionTotal),
     }));
 
-    const sourceData = (data.bySourceOfEnquiry || []).map((d) => ({
-      label: d.source,
-      count: d.count,
-      amount: d.amount,
-      percentage: d.percentage,
-    }));
-
-    const engineerRows = (data.byEngineer || []).map((d) => ({
-      label: d.engineer,
-      count: d.count,
-      amount: d.amount,
-      percentage: d.percentage,
-    }));
-
     const weeklyTrend = data.weeklyTrend || [];
     const weeklyTotal = weeklyTrend.reduce((s, w) => s + w.count, 0);
-
-    const topCustomerRows = (data.topCustomers || []).map((d, i) => ({
-      ...d,
-      rank: i + 1,
-    }));
 
     return {
       trendData,
       statusData,
       divisionBars: divisionRows.map((d) => ({ label: d.division, amount: d.amount })),
       divisionRows,
-      sourceData,
-      engineerRows,
-      engineerBars: engineerRows.map((d) => ({ label: d.engineer, amount: d.amount })),
       weeklyTrend,
       weeklyTotal,
-      topCustomerRows,
     };
   }, [data]);
 
@@ -413,7 +473,7 @@ export default function DashboardPage() {
                 description="Count of quotations over time"
               />
               <CardBody>
-                <TrendChart data={charts.trendData} valueKey="count" />
+                <TrendChart data={charts.trendData} valueKey="count" onPointClick={handleTrendClick} />
               </CardBody>
             </Card>
 
@@ -424,7 +484,7 @@ export default function DashboardPage() {
                 description="Distribution by order status"
               />
               <CardBody>
-                <DonutChart data={charts.statusData} valueKey="count" secondaryKey="amount" />
+                <DonutChart data={charts.statusData} valueKey="count" secondaryKey="amount" onSegmentClick={handleStatusClick} />
               </CardBody>
             </Card>
 
@@ -439,6 +499,7 @@ export default function DashboardPage() {
                   data={charts.divisionBars}
                   valueKey="amount"
                   showValues={charts.divisionBars.length <= 6}
+                  onBarClick={handleDivisionClick}
                 />
                 <div className="mt-5 overflow-x-auto rounded-lg border border-ink-100">
                   <table className="w-full text-xs">
@@ -474,65 +535,19 @@ export default function DashboardPage() {
               </CardBody>
             </Card>
 
-            <Card className="lg:col-span-4">
-              <CardHeader
-                eyebrow="Enquiry"
-                title="Source of Enquiry"
-                description="Where quotations come from"
-              />
-              <CardBody>
-                <DonutChart data={charts.sourceData} valueKey="count" secondaryKey="amount" />
-              </CardBody>
-            </Card>
-
-            <Card className="lg:col-span-4">
-              <CardHeader
-                eyebrow="Sales Team"
-                title="Amount by Engineer"
-                description="Top 10 engineers + others"
-              />
-              <CardBody>
-                <HBarChart data={charts.engineerBars} valueKey="amount" />
-              </CardBody>
-            </Card>
-
             <Card className="lg:col-span-8">
               <CardHeader
                 eyebrow="Performance"
                 title="Weekly Quotation Performance"
-                description={`${charts.weeklyTrend.length} weeks, ${charts.weeklyTotal} quotations`}
+                description={`${charts.weeklyTrend.length} week${charts.weeklyTrend.length === 1 ? "" : "s"}, ${charts.weeklyTotal} quotation${charts.weeklyTotal === 1 ? "" : "s"}`}
               />
               <CardBody>
-                <StackedBarChart data={charts.weeklyTrend} valueKey="count" />
-              </CardBody>
-            </Card>
-
-            <Card className="lg:col-span-4">
-              <CardHeader eyebrow="Customers" title="Top Customers" description="By quotation value" />
-              <CardBody className="px-2 sm:px-2">
-                <div className="space-y-3">
-                  {charts.topCustomerRows.map((row) => (
-                    <div key={row.customerName} className="flex items-center gap-3 rounded-lg px-3 py-1.5">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-50 font-mono text-xs font-semibold text-ink-500">
-                        {row.rank}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-ink-800" title={row.customerName}>
-                          {row.customerName}
-                        </p>
-                        <p className="text-xs text-ink-400">
-                          {row.count} quotation{row.count === 1 ? "" : "s"}
-                        </p>
-                      </div>
-                      <span className="shrink-0 font-mono text-sm font-semibold text-ink-800">
-                        {formatCompactCurrency(row.amount)}
-                      </span>
-                    </div>
-                  ))}
-                  {charts.topCustomerRows.length === 0 && (
-                    <p className="px-3 py-4 text-center text-sm text-ink-300">No customer data</p>
-                  )}
-                </div>
+                <StackedBarChart
+                  data={charts.weeklyTrend}
+                  valueKey="count"
+                  onBarClick={handleWeeklyBarClick}
+                  onSegmentClick={handleWeeklySegmentClick}
+                />
               </CardBody>
             </Card>
           </div>
@@ -544,6 +559,15 @@ export default function DashboardPage() {
           isOpen={showFollowups}
           onClose={() => setShowFollowups(false)}
           onDataChanged={() => setReloadToken((t) => t + 1)}
+        />
+      )}
+
+      {drilldown && (
+        <QuotationDrilldownModal
+          isOpen
+          onClose={() => setDrilldown(null)}
+          title={drilldown.title}
+          baseQuery={drilldown.baseQuery}
         />
       )}
 
