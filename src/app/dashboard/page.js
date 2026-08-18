@@ -7,10 +7,8 @@ import {
   IndianRupee,
   Trophy,
   Clock,
-  TrendingDown,
   Percent,
   Calculator,
-  Package,
   RefreshCw,
   LayoutDashboard,
   Filter,
@@ -216,13 +214,6 @@ export default function DashboardPage() {
         tint: "bg-amber-50 text-amber-600",
       },
       {
-        label: "Lost + Dead",
-        value: s.closedCount,
-        sub: `${formatCompactCurrency(s.closedAmount)} value`,
-        icon: TrendingDown,
-        tint: "bg-danger-50 text-danger-600",
-      },
-      {
         label: "Conversion Rate",
         value: `${s.conversionRate}%`,
         sub: "won ÷ total quotations",
@@ -237,13 +228,6 @@ export default function DashboardPage() {
         tint: "bg-amber-50 text-amber-600",
         onClick: () => setShowFollowups(true),
         clickable: true,
-      },
-      {
-        label: "Items Quoted",
-        value: s.totalItems,
-        sub: "total line items",
-        icon: Package,
-        tint: "bg-accent-50 text-accent-600",
       },
     ];
   }, [data]);
