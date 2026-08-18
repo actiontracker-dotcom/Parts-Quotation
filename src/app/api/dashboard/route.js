@@ -19,12 +19,14 @@ const NO_STORE_HEADERS = { "Cache-Control": "no-store, max-age=0, must-revalidat
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-// Blank Order Status rows represent quotations still in the funnel.
-const OPEN_STATUS = "Open";
+// Pending is the canonical in-funnel status stored in the sheet. New quotations
+// are written with "Order Status = Pending", and blank Order Status rows
+// (legacy) also represent quotations still in the funnel.
+const PENDING_STATUS = "Pending";
 
 function normalizeOrderStatus(raw) {
   const v = String(raw || "").trim();
-  return v ? v : OPEN_STATUS;
+  return v ? v : PENDING_STATUS;
 }
 
 function shortDate(date) {
@@ -129,10 +131,8 @@ export async function GET(request) {
       list = list.filter((q) => (q.division || "").trim() === divisionFilter);
     }
 
-    if (orderStatusFilter && orderStatusFilter !== OPEN_STATUS) {
+    if (orderStatusFilter) {
       list = list.filter((q) => normalizeOrderStatus(q.orderStatus) === orderStatusFilter);
-    } else if (orderStatusFilter === OPEN_STATUS) {
-      list = list.filter((q) => normalizeOrderStatus(q.orderStatus) === OPEN_STATUS);
     }
 
     if (enquiryGeneratedByFilter) {
@@ -164,8 +164,8 @@ export async function GET(request) {
       { totalAmount: 0, totalItems: 0 }
     );
 
-    const byStatus = { Won: 0, Loss: 0, Dead: 0, Partial: 0, [OPEN_STATUS]: 0 };
-    const byStatusAmount = { Won: 0, Loss: 0, Dead: 0, Partial: 0, [OPEN_STATUS]: 0 };
+    const byStatus = { Won: 0, Loss: 0, Dead: 0, Partial: 0, [PENDING_STATUS]: 0 };
+    const byStatusAmount = { Won: 0, Loss: 0, Dead: 0, Partial: 0, [PENDING_STATUS]: 0 };
     for (const q of list) {
       const s = normalizeOrderStatus(q.orderStatus);
       byStatus[s] = (byStatus[s] || 0) + 1;
@@ -174,8 +174,8 @@ export async function GET(request) {
 
     const wonCount = byStatus.Won;
     const wonAmount = byStatusAmount.Won;
-    const openCount = byStatus[OPEN_STATUS];
-    const openAmount = byStatusAmount[OPEN_STATUS];
+    const openCount = byStatus[PENDING_STATUS];
+    const openAmount = byStatusAmount[PENDING_STATUS];
     const closedCount = byStatus.Loss + byStatus.Dead;
     const closedAmount = byStatusAmount.Loss + byStatusAmount.Dead;
 
@@ -205,7 +205,7 @@ export async function GET(request) {
     const byDivision = Array.from(divisionMap.values()).sort((a, b) => b.amount - a.amount);
 
     // ── Order Status ──────────────────────────────────────────────────────────
-    const byOrderStatus = ["Won", "Loss", "Dead", "Partial", OPEN_STATUS]
+    const byOrderStatus = ["Won", "Loss", "Dead", "Partial", PENDING_STATUS]
       .filter((s) => byStatus[s] > 0)
       .map((s) => ({ status: s, count: byStatus[s], amount: byStatusAmount[s] }));
 

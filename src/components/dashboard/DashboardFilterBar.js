@@ -20,7 +20,7 @@ export const DATE_RANGE_OPTIONS = [
 const STATUS_OPTIONS = [
   { value: "All", label: "All Statuses" },
   ...ORDER_STATUS_OPTIONS,
-  { value: "Open", label: "Pending" },
+  { value: "Pending", label: "Pending" },
 ];
 
 export default function DashboardFilterBar({
