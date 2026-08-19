@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getCurrentPendingFollowupRecords } from "@/lib/services/googleSheetsService";
 import { parseQuotationDate, toDateKey, startOfWeek, isoWeekInfo } from "@/lib/utils/dateUtils";
 import { loadDashboardQuotations, PENDING_STATUS, normalizeOrderStatus } from "@/lib/server/dashboard";
 
@@ -249,13 +248,15 @@ export async function GET(request) {
       }));
 
     // ── Pending Follow-ups KPI ────────────────────────────────────────────────
-    // TOTAL current Pending follow-ups across ALL dates (past, today and future)
-    // — one per quotation via the shared current-Pending business rule.
-    // Deliberately independent of every dashboard filter. The Follow-up Details
-    // modal (a separate feature) loads its own detail data via
-    // /api/dashboard/followups.
-    const pendingFollowups = await getCurrentPendingFollowupRecords();
-    const pendingFollowupCount = pendingFollowups.length;
+    // TOTAL distinct quotations whose CURRENT Order Status is "Pending" across
+    // ALL dates (past, today and future) — with or without a Follow-up Form
+    // record, so a quotation enters the set the moment it is created as
+    // Pending. Deliberately independent of every dashboard filter. The
+    // Follow-up Details modal (a separate feature) loads its own detail data
+    // via /api/dashboard/followups.
+    const pendingFollowupCount = enriched.filter(
+      (q) => normalizeOrderStatus(q.orderStatus) === PENDING_STATUS
+    ).length;
 
     return NextResponse.json(
       {

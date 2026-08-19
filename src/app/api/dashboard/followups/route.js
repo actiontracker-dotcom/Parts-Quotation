@@ -5,6 +5,7 @@ import {
   readFollowupFormRecords,
 } from "@/lib/services/googleSheetsService";
 import { parseQuotationDate, toDateKey } from "@/lib/utils/dateUtils";
+import { PENDING_STATUS, normalizeOrderStatus } from "@/lib/server/dashboard";
 
 // Detail endpoint for the "Pending Follow-ups" dashboard card.
 //
@@ -17,10 +18,12 @@ import { parseQuotationDate, toDateKey } from "@/lib/utils/dateUtils";
 //   limit  - records per page (default 20, capped at 100)
 //
 // Data model:
-//   - Pending    -> the CURRENT Pending follow-up per quotation
-//                   (getCurrentPendingFollowupRecords: newest "Next Follow-up"
-//                   history row per quotation whose Followup Status is
-//                   "Pending"), so a quotation can never appear more than once.
+//   - Pending    -> every Data-sheet quotation whose CURRENT Order Status is
+//                   "Pending" (with or without a Follow-up Form record),
+//                   enriched with the current Pending Next Follow-up record per
+//                   quotation when one exists. A newly created Pending
+//                   quotation therefore appears immediately, and a quotation
+//                   can never appear more than once.
 //   - Completed  -> ALL historical "Next Follow-up" rows in "Followup Form for
 //                   Quotation" whose Followup Status is "Completed". This comes
 //                   from the full history, never from the current-only Pending
@@ -109,7 +112,44 @@ export async function GET(request) {
           String(record["Followup Status"] || "").trim() === "Completed"
       );
     } else {
-      records = pendingRecords;
+      // Pending dataset = every Data-sheet quotation whose CURRENT Order Status
+      // is Pending, merged with its current Pending Next Follow-up record (if
+      // any) from the Followup Form. A quotation appears the moment it is
+      // created as Pending — no Follow-up Form record is required. When both
+      // exist the quotation is represented only once and the Follow-up Form
+      // record wins for the follow-up-specific fields. Quotations without a
+      // current Pending Next Follow-up carry blank follow-up fields and a
+      // "Pending" follow-up status (represented at runtime only — nothing is
+      // ever written to the Followup Form).
+      const pendingQuotations = quotations.filter(
+        (q) => normalizeOrderStatus(q.orderStatus) === PENDING_STATUS
+      );
+      const pendingQuotationNos = new Set(pendingQuotations.map((q) => q.quotationNo));
+
+      // Existing current Pending Next Follow-up rows first (they are already
+      // sorted by "Next Followup Date" ascending and carry the real follow-up
+      // values)...
+      const pendingRows = [];
+      for (const record of pendingRecords) {
+        if (pendingQuotationNos.has((record["Quotation No"] || "").trim())) {
+          pendingRows.push(record);
+        }
+      }
+
+      // ...then Pending quotations that have NO current Pending Next Follow-up,
+      // using the quotation's own information with blank follow-up fields.
+      const seen = new Set(pendingRows.map((r) => (r["Quotation No"] || "").trim()));
+      for (const q of pendingQuotations) {
+        if (seen.has(q.quotationNo)) continue;
+        pendingRows.push({
+          "Quotation No": q.quotationNo,
+          "Next Followup Date": "",
+          "Followup Status": PENDING_STATUS,
+          "Followup Remark": "",
+        });
+      }
+
+      records = pendingRows;
     }
 
     // Date filter: the record's "Next Followup Date" must be one of the selected

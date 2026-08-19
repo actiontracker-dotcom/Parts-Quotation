@@ -587,7 +587,7 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
                           <StatusPill value={record.followupStatus} />
                         </td>
                         <td className="px-5 py-4 max-w-[300px] truncate text-ink-600" title={record.followupRemark}>
-                          {record.followupRemark}
+                          {record.followupRemark || "—"}
                         </td>
                         <td className="px-5 py-4 text-center whitespace-nowrap">
                           <button
