@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   X,
   Calendar,
+  Search,
   Loader2,
   Inbox,
   ChevronLeft,
@@ -144,6 +145,8 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
   const [page, setPage] = useState(1);
   const [followUpRecord, setFollowUpRecord] = useState(null);
   const [detailQuotationNo, setDetailQuotationNo] = useState(null);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const [records, setRecords] = useState(null);
   const [pagination, setPagination] = useState(null);
@@ -169,7 +172,20 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
     setCustomMode(false);
     setFollowUpRecord(null);
     setDetailQuotationNo(null);
+    setSearch("");
+    setDebouncedSearch("");
   }, [isOpen]);
+
+  // Debounce the search input (300ms) so the API is not called on every
+  // keystroke. When the debounced value settles, reset pagination to page 1.
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [isOpen, search]);
 
   // When the popover closes, reset to the preset view so the calendar is not
   // shown immediately on the next open.
@@ -202,7 +218,7 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [datePopoverOpen]);
 
-  const load = useCallback(async (nextStatus, nextDates, nextPage) => {
+  const load = useCallback(async (nextStatus, nextDates, nextPage, nextSearch) => {
     setLoading(true);
     setError(null);
     try {
@@ -210,6 +226,10 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
       params.set("status", nextStatus);
       if (nextDates.size > 0) {
         params.set("dates", Array.from(nextDates).sort().join(","));
+      }
+      const trimmedSearch = (nextSearch || "").trim();
+      if (trimmedSearch) {
+        params.set("q", trimmedSearch);
       }
       params.set("page", String(nextPage));
       params.set("limit", String(LIMIT));
@@ -235,8 +255,8 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
 
   useEffect(() => {
     if (!isOpen) return;
-    load(status, selectedDates, page);
-  }, [isOpen, status, selectedDates, page, load]);
+    load(status, selectedDates, page, debouncedSearch);
+  }, [isOpen, status, selectedDates, page, debouncedSearch, load]);
 
   function handlePreset(id) {
     setSelectedDates(new Set(presetDates(id, new Date())));
@@ -498,15 +518,29 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
                   )}
                 </div>
               </div>
+
+              <div className="w-full sm:w-72">
+                <label className="mb-1.5 flex items-center gap-1 text-sm font-medium text-ink-600">
+                  Search
+                </label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search quotation no. or customer..."
+                    className="h-10 w-full rounded-lg border border-ink-100 bg-white pl-9 pr-3 text-sm text-ink-800 placeholder:text-ink-300 transition-colors focus:border-accent-400 focus:outline-none"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="sm:pb-1">
-              {total > 0 && (
-                <p className="text-sm text-ink-400">
-                  <span className="font-semibold text-ink-700">{total}</span> matching record
-                  {total === 1 ? "" : "s"}
-                </p>
-              )}
+              <p className="text-sm text-ink-400">
+                <span className="font-semibold text-ink-700">{total}</span> matching record
+                {total === 1 ? "" : "s"}
+              </p>
             </div>
           </div>
 
@@ -527,7 +561,7 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
                 <Button
                   variant="secondary"
                   className="mt-4"
-                  onClick={() => load(status, selectedDates, page)}
+                  onClick={() => load(status, selectedDates, page, debouncedSearch)}
                 >
                   Retry
                 </Button>
@@ -683,7 +717,7 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
           orderStatus={followUpRecord.orderStatus || ""}
           onClose={() => setFollowUpRecord(null)}
           onSuccess={() => {
-            load(status, selectedDates, page);
+            load(status, selectedDates, page, debouncedSearch);
             onDataChanged?.();
           }}
         />

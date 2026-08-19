@@ -76,6 +76,12 @@ export async function GET(request) {
     const limit =
       Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, MAX_LIMIT) : DEFAULT_LIMIT;
 
+    // Optional case-insensitive search over Quotation No and Customer Name. It
+    // is applied AFTER the status/date filters and BEFORE pagination so that
+    // pagination.total reflects Status + Date + Search together (search never
+    // runs against an already-paginated page).
+    const q = (searchParams.get("q") || "").trim().toLowerCase();
+
     // Load the aggregated quotations once and join follow-up rows by Quotation No.
     const { quotations } = await loadQuotations();
     const quotationMap = new Map();
@@ -171,11 +177,24 @@ export async function GET(request) {
       };
     });
 
-    const total = enriched.length;
+    // Search filter: case-insensitive substring match on Quotation No or
+    // Customer Name, applied BEFORE pagination so search covers every matching
+    // record, not just the current page. AND-combined with the existing
+    // Status and Date filters because it operates on the already-filtered set.
+    let searchable = enriched;
+    if (q) {
+      searchable = enriched.filter(
+        (record) =>
+          (record.quotationNo || "").toLowerCase().includes(q) ||
+          (record.customerName || "").toLowerCase().includes(q)
+      );
+    }
+
+    const total = searchable.length;
     const totalPages = Math.max(1, Math.ceil(total / limit));
     const safePage = Math.min(page, totalPages);
     const offset = (safePage - 1) * limit;
-    const pageRecords = enriched.slice(offset, offset + limit);
+    const pageRecords = searchable.slice(offset, offset + limit);
 
     return NextResponse.json(
       {
