@@ -18,7 +18,7 @@ export const DATE_RANGE_OPTIONS = [
 ];
 
 const STATUS_OPTIONS = [
-  { value: "All", label: "All Statuses" },
+  { value: "All", label: "All Status" },
   ...ORDER_STATUS_OPTIONS,
   { value: "Pending", label: "Pending" },
 ];

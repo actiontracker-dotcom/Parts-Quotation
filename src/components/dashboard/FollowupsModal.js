@@ -11,17 +11,11 @@ import {
   ChevronDown,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
-import Select from "@/components/ui/Select";
 import QuotationFollowupModal from "@/components/quotations/QuotationFollowupModal";
 import { cn } from "@/lib/utils/cn";
 import { parseQuotationDate, toDateKey, addDays, startOfWeek } from "@/lib/utils/dateUtils";
 
 const LIMIT = 20;
-
-const STATUS_OPTIONS = [
-  { value: "Pending", label: "Pending" },
-  { value: "Completed", label: "Completed" },
-];
 
 const PRESETS = [
   { id: "all", label: "All Dates" },
@@ -241,11 +235,6 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
     load(status, selectedDates, page);
   }, [isOpen, status, selectedDates, page, load]);
 
-  function handleStatusChange(e) {
-    setStatus(e.target.value);
-    setPage(1);
-  }
-
   function handlePreset(id) {
     setSelectedDates(new Set(presetDates(id, new Date())));
     setActivePreset(id);
@@ -329,12 +318,12 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
               <div className="w-full sm:w-56">
-                <Select
-                  label="Status"
-                  options={STATUS_OPTIONS}
-                  value={status}
-                  onChange={handleStatusChange}
-                />
+                <label className="mb-1.5 flex items-center gap-1 text-sm font-medium text-ink-600">
+                  Status
+                </label>
+                <div className="flex h-10 w-full items-center rounded-lg border border-ink-100 bg-white px-3 text-sm text-ink-800">
+                  Pending
+                </div>
               </div>
 
               <div className="w-full sm:w-72">
