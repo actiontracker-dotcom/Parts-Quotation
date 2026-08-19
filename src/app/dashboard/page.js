@@ -377,7 +377,7 @@ export default function DashboardPage() {
             </p>
             <p className="text-xs text-ink-400">
               {me
-                ? `Signed in as ${me.username} · figures refresh from the sheet on every load.`
+                ? `Signed in as ${me.username.charAt(0).toUpperCase() + me.username.slice(1)} · figures refresh from the sheet on every load.`
                 : "Figures refresh from the sheet every time you load the dashboard."}
             </p>
           </div>
