@@ -12,6 +12,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
+import Select from "@/components/ui/Select";
 import QuotationDetailsModal from "@/components/quotations/QuotationDetailsModal";
 import QuotationFollowupModal from "@/components/quotations/QuotationFollowupModal";
 import { cn } from "@/lib/utils/cn";
@@ -136,7 +137,6 @@ function presetDates(id, now) {
 
 export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
   const [mounted, setMounted] = useState(false);
-  const [status, setStatus] = useState("Pending");
   const [selectedDates, setSelectedDates] = useState(() => new Set());
   const [activePreset, setActivePreset] = useState("all");
   const [datePopoverOpen, setDatePopoverOpen] = useState(false);
@@ -147,6 +147,8 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
   const [detailQuotationNo, setDetailQuotationNo] = useState(null);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [division, setDivision] = useState("All");
+  const [availableDivisions, setAvailableDivisions] = useState([]);
 
   const [records, setRecords] = useState(null);
   const [pagination, setPagination] = useState(null);
@@ -163,7 +165,6 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
   // On open the filter always starts fresh: Pending + All Dates.
   useEffect(() => {
     if (!isOpen) return;
-    setStatus("Pending");
     setSelectedDates(new Set());
     setActivePreset("all");
     setPage(1);
@@ -174,6 +175,8 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
     setDetailQuotationNo(null);
     setSearch("");
     setDebouncedSearch("");
+    setDivision("All");
+    setAvailableDivisions([]);
   }, [isOpen]);
 
   // Debounce the search input (300ms) so the API is not called on every
@@ -218,7 +221,7 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [datePopoverOpen]);
 
-  const load = useCallback(async (nextStatus, nextDates, nextPage, nextSearch) => {
+  const load = useCallback(async (nextStatus, nextDates, nextPage, nextSearch, nextDivision) => {
     setLoading(true);
     setError(null);
     try {
@@ -230,6 +233,9 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
       const trimmedSearch = (nextSearch || "").trim();
       if (trimmedSearch) {
         params.set("q", trimmedSearch);
+      }
+      if (nextDivision && nextDivision !== "All") {
+        params.set("division", nextDivision);
       }
       params.set("page", String(nextPage));
       params.set("limit", String(LIMIT));
@@ -244,6 +250,7 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
       }
       setRecords(json.records || []);
       setPagination(json.pagination || null);
+      setAvailableDivisions(json.availableDivisions || []);
     } catch (err) {
       setError(err.message || "Unable to load follow-ups. Please try again.");
       setRecords([]);
@@ -255,8 +262,8 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
 
   useEffect(() => {
     if (!isOpen) return;
-    load(status, selectedDates, page, debouncedSearch);
-  }, [isOpen, status, selectedDates, page, debouncedSearch, load]);
+    load("Pending", selectedDates, page, debouncedSearch, division);
+  }, [isOpen, selectedDates, page, debouncedSearch, division, load]);
 
   function handlePreset(id) {
     setSelectedDates(new Set(presetDates(id, new Date())));
@@ -268,6 +275,11 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
   function handleClearDates() {
     setSelectedDates(new Set());
     setActivePreset("all");
+    setPage(1);
+  }
+
+  function handleDivisionChange(value) {
+    setDivision(value);
     setPage(1);
   }
 
@@ -340,15 +352,6 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
         <div className="flex-1 overflow-y-auto px-6 py-6 sm:px-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-              <div className="w-full sm:w-56">
-                <label className="mb-1.5 flex items-center gap-1 text-sm font-medium text-ink-600">
-                  Status
-                </label>
-                <div className="flex h-10 w-full items-center rounded-lg border border-ink-100 bg-white px-3 text-sm text-ink-800">
-                  Pending
-                </div>
-              </div>
-
               <div className="w-full sm:w-72">
                 <label className="mb-1.5 flex items-center gap-1 text-sm font-medium text-ink-600">
                   Date
@@ -519,6 +522,18 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
                 </div>
               </div>
 
+              <div className="w-full sm:w-56">
+                <Select
+                  label="Division"
+                  value={division}
+                  onChange={(e) => handleDivisionChange(e.target.value)}
+                  options={[
+                    { value: "All", label: "All Divisions" },
+                    ...availableDivisions.map((d) => ({ value: d, label: d })),
+                  ]}
+                />
+              </div>
+
               <div className="w-full sm:w-72">
                 <label className="mb-1.5 flex items-center gap-1 text-sm font-medium text-ink-600">
                   Search
@@ -561,7 +576,7 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
                 <Button
                   variant="secondary"
                   className="mt-4"
-                  onClick={() => load(status, selectedDates, page, debouncedSearch)}
+                  onClick={() => load("Pending", selectedDates, page, debouncedSearch, division)}
                 >
                   Retry
                 </Button>
@@ -717,7 +732,7 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
           orderStatus={followUpRecord.orderStatus || ""}
           onClose={() => setFollowUpRecord(null)}
           onSuccess={() => {
-            load(status, selectedDates, page, debouncedSearch);
+            load("Pending", selectedDates, page, debouncedSearch, division);
             onDataChanged?.();
           }}
         />

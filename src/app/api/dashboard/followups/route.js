@@ -16,6 +16,10 @@ import { PENDING_STATUS, normalizeOrderStatus } from "@/lib/server/dashboard";
 //            OR-ed together on the "Next Followup Date" field.
 //   page   - 1-based page number (default 1)
 //   limit  - records per page (default 20, capped at 100)
+//   q      - optional case-insensitive substring search over Quotation No /
+//            Customer Name (empty/missing = no search)
+//   division - optional exact Division filter on the quotation's Division value
+//            (empty/missing = All Divisions)
 //
 // Data model:
 //   - Pending    -> every Data-sheet quotation whose CURRENT Order Status is
@@ -82,10 +86,32 @@ export async function GET(request) {
     // runs against an already-paginated page).
     const q = (searchParams.get("q") || "").trim().toLowerCase();
 
+    // Optional Division filter. Exact match on the quotation's Division value;
+    // empty/missing means All Divisions. "All" is a UI-only option and is never
+    // sent here.
+    const division = (searchParams.get("division") || "").trim();
+
     // Load the aggregated quotations once and join follow-up rows by Quotation No.
     const { quotations } = await loadQuotations();
     const quotationMap = new Map();
     for (const q of quotations) quotationMap.set(q.quotationNo, q);
+
+    // Division dropdown options derived from the actual quotation data already
+    // loaded by loadQuotations() — no extra read. Options come from the full
+    // dataset (not the current status/date/search filter) so they never
+    // disappear while a filter is active, mirroring /api/dashboard.
+    const availableDivisions = [];
+    {
+      const seen = new Set();
+      for (const quotation of quotations) {
+        const d = (quotation.division || "").trim() || "Unspecified";
+        if (!seen.has(d)) {
+          seen.add(d);
+          availableDivisions.push(d);
+        }
+      }
+      availableDivisions.sort();
+    }
 
     // Current Pending (one per quotation) + full history. Both come from the
     // same "Followup Form for Quotation" sheet via the existing service helpers.
@@ -171,19 +197,28 @@ export async function GET(request) {
         quotationNo,
         customerName: quotation?.customerName || "",
         orderStatus: quotation?.orderStatus || "",
+        division: (quotation?.division || "").trim() || "Unspecified",
         nextFollowupDate: record["Next Followup Date"] || "",
         followupStatus: record["Followup Status"] || "",
         followupRemark: record["Followup Remark"] || "",
       };
     });
 
+    // Division filter: exact match on the enriched Division value, applied BEFORE
+    // pagination so the count and pages reflect the filtered set. Empty/missing
+    // means All Divisions. Runs before Search so all filters combine via AND.
+    let searchable = enriched;
+    if (division) {
+      searchable = searchable.filter((record) => record.division === division);
+    }
+
     // Search filter: case-insensitive substring match on Quotation No or
     // Customer Name, applied BEFORE pagination so search covers every matching
     // record, not just the current page. AND-combined with the existing
-    // Status and Date filters because it operates on the already-filtered set.
-    let searchable = enriched;
+    // Status, Date and Division filters because it operates on the
+    // already-filtered set.
     if (q) {
-      searchable = enriched.filter(
+      searchable = searchable.filter(
         (record) =>
           (record.quotationNo || "").toLowerCase().includes(q) ||
           (record.customerName || "").toLowerCase().includes(q)
@@ -202,6 +237,7 @@ export async function GET(request) {
         status,
         records: pageRecords,
         availableDates,
+        availableDivisions,
         pagination: {
           page: safePage,
           limit,
