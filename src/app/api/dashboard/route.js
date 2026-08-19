@@ -126,6 +126,8 @@ export async function GET(request) {
       totalItems: totals.totalItems,
       wonCount,
       wonAmount,
+      lossCount: byStatus.Loss,
+      lossAmount: byStatusAmount.Loss,
       openCount,
       openAmount,
       closedCount,

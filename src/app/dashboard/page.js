@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   Filter,
   Calendar,
+  TrendingDown,
 } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import Card, { CardHeader, CardBody } from "@/components/ui/Card";
@@ -281,6 +282,15 @@ export default function DashboardPage() {
         icon: Trophy,
         tint: "bg-teal-50 text-teal-600",
         onClick: () => handleStatusAllClick("Won"),
+        clickable: true,
+      },
+      {
+        label: "Loss",
+        value: s.lossCount,
+        sub: `${formatCompactCurrency(s.lossAmount)} loss value`,
+        icon: TrendingDown,
+        tint: "bg-danger-50 text-danger-600",
+        onClick: () => handleStatusAllClick("Loss"),
         clickable: true,
       },
       {
