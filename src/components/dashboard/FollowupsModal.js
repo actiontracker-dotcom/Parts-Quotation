@@ -11,6 +11,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
+import QuotationDetailsModal from "@/components/quotations/QuotationDetailsModal";
 import QuotationFollowupModal from "@/components/quotations/QuotationFollowupModal";
 import { cn } from "@/lib/utils/cn";
 import { parseQuotationDate, toDateKey, addDays, startOfWeek } from "@/lib/utils/dateUtils";
@@ -142,6 +143,7 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
   const [page, setPage] = useState(1);
   const [followUpRecord, setFollowUpRecord] = useState(null);
+  const [detailQuotationNo, setDetailQuotationNo] = useState(null);
 
   const [records, setRecords] = useState(null);
   const [pagination, setPagination] = useState(null);
@@ -166,6 +168,7 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
     setDatePopoverOpen(false);
     setCustomMode(false);
     setFollowUpRecord(null);
+    setDetailQuotationNo(null);
   }, [isOpen]);
 
   // When the popover closes, reset to the preset view so the calendar is not
@@ -563,8 +566,15 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
                         key={`${record.quotationNo}-${idx}`}
                         className="border-b border-ink-50 transition-colors hover:bg-ink-50/50"
                       >
-                        <td className="px-5 py-4 font-mono text-xs font-semibold text-accent-600 whitespace-nowrap">
-                          {record.quotationNo}
+                        <td className="px-5 py-4 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => setDetailQuotationNo(record.quotationNo)}
+                            className="cursor-pointer font-mono text-xs font-semibold text-accent-600 transition-colors hover:text-accent-700 hover:underline"
+                            title="View quotation details"
+                          >
+                            {record.quotationNo}
+                          </button>
                         </td>
                         <td className="px-5 py-4 max-w-[220px] truncate font-medium text-ink-900" title={record.customerName}>
                           {record.customerName}
@@ -676,6 +686,13 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
             load(status, selectedDates, page);
             onDataChanged?.();
           }}
+        />
+      )}
+
+      {detailQuotationNo && (
+        <QuotationDetailsModal
+          quotationNo={detailQuotationNo}
+          onClose={() => setDetailQuotationNo(null)}
         />
       )}
     </div>
