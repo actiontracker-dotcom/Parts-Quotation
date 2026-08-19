@@ -15,9 +15,12 @@ const REPORT_HEADERS = [
   "ORDER STATUS",
   "QUOTATION DATE",
   "TOTAL AMOUNT",
+  "PART NUMBER",
+  "DESCRIPTION",
+  "QUANTITY",
 ];
 
-const REPORT_COLUMN_WIDTHS = [32, 32, 15, 11, 6, 14, 15, 16];
+const REPORT_COLUMN_WIDTHS = [32, 32, 15, 11, 6, 14, 15, 16, 15, 42, 10];
 
 // Indian (lakh/crore) currency number format with the rupee symbol.
 const INR_AMOUNT_FORMAT =
@@ -106,6 +109,19 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function cleanTextValue(value) {
+  if (value === undefined || value === null) return "-";
+  const s = String(value);
+  return s.trim() === "" ? "-" : s;
+}
+
+function quantityCellValue(value) {
+  if (value === undefined || value === null || value === "") return "-";
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 0) return "-";
+  return n;
+}
+
 /**
  * Builds and downloads a styled .xlsx quotation report from the given (already
  * filtered) quotations. Includes a navy title band, filter summary, KPI cards,
@@ -119,7 +135,7 @@ export async function exportQuotationsExcel({ quotations, filters }) {
   ws.columns = REPORT_COLUMN_WIDTHS.map((width) => ({ width }));
 
   // ── Report title ─────────────────────────────────────────────
-  ws.mergeCells("A1:H1");
+  ws.mergeCells("A1:K1");
   const title = ws.getCell("A1");
   title.value = "QUOTATION REPORT";
   title.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
@@ -208,49 +224,66 @@ export async function exportQuotationsExcel({ quotations, filters }) {
     { horizontal: "center", vertical: "middle" },
     { horizontal: "center", vertical: "middle" },
     { horizontal: "right", vertical: "middle" },
+    { horizontal: "left", vertical: "middle", wrapText: true },
+    { horizontal: "left", vertical: "middle", wrapText: true },
+    { horizontal: "center", vertical: "middle" },
   ];
 
-  quotations.forEach((q, i) => {
-    const r = headerRow + 1 + i;
-    const shade = i % 2 === 1;
-    const rowFill = shade
-      ? { type: "pattern", pattern: "solid", fgColor: { argb: "FFF4F6FB" } }
-      : null;
+  let dataRowIndex = headerRow + 1;
 
-    const values = [
-      q.quotationNo,
-      q.customerName,
-      q.contactNumber,
-      q.division,
-      Number.isFinite(Number(q.numberOfFollowup)) ? Number(q.numberOfFollowup) : (q.numberOfFollowup || ""),
-      q.orderStatus,
-      formatDate(q.quotationDate),
-      Number(q.totalAmount) || 0,
-    ];
+  quotations.forEach((q) => {
+    const itemRows =
+      Array.isArray(q.items) && q.items.length > 0
+        ? q.items
+        : [{ partNumber: "-", description: "-", quantity: "-" }];
 
-    values.forEach((value, c) => {
-      const cell = ws.getCell(r, c + 1);
-      cell.value = value;
-      cell.alignment = dataAlignment[c];
-      cell.border = { top: THIN_GRAY, left: THIN_GRAY, bottom: THIN_GRAY, right: THIN_GRAY };
-      if (rowFill) cell.fill = rowFill;
+    itemRows.forEach((item) => {
+      const r = dataRowIndex;
+      dataRowIndex += 1;
 
-      if (c === 5) {
-        // Semantic order status chip
-        const key = String(value || "").trim().toLowerCase();
-        const style = STATUS_STYLES[key] || STATUS_STYLES.fallback;
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: style.fill } };
-        cell.font = { bold: true, color: { argb: style.color } };
-      } else if (c === 7) {
-        cell.numFmt = INR_AMOUNT_FORMAT;
-        cell.font = { bold: true, color: { argb: "FF1F3487" } };
-      }
+      const shade = (r - headerRow - 1) % 2 === 1;
+      const rowFill = shade
+        ? { type: "pattern", pattern: "solid", fgColor: { argb: "FFF4F6FB" } }
+        : null;
+
+      const values = [
+        q.quotationNo,
+        q.customerName,
+        q.contactNumber,
+        q.division,
+        Number.isFinite(Number(q.numberOfFollowup)) ? Number(q.numberOfFollowup) : (q.numberOfFollowup || ""),
+        q.orderStatus,
+        formatDate(q.quotationDate),
+        Number(q.totalAmount) || 0,
+        cleanTextValue(item.partNumber),
+        cleanTextValue(item.description),
+        quantityCellValue(item.quantity),
+      ];
+
+      values.forEach((value, c) => {
+        const cell = ws.getCell(r, c + 1);
+        cell.value = value;
+        cell.alignment = dataAlignment[c];
+        cell.border = { top: THIN_GRAY, left: THIN_GRAY, bottom: THIN_GRAY, right: THIN_GRAY };
+        if (rowFill) cell.fill = rowFill;
+
+        if (c === 5) {
+          // Semantic order status chip
+          const key = String(value || "").trim().toLowerCase();
+          const style = STATUS_STYLES[key] || STATUS_STYLES.fallback;
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: style.fill } };
+          cell.font = { bold: true, color: { argb: style.color } };
+        } else if (c === 7) {
+          cell.numFmt = INR_AMOUNT_FORMAT;
+          cell.font = { bold: true, color: { argb: "FF1F3487" } };
+        }
+      });
+
+      ws.getRow(r).height = 20;
     });
-
-    ws.getRow(r).height = 20;
   });
 
-  const lastDataRow = headerRow + quotations.length;
+  const lastDataRow = dataRowIndex - 1;
 
   // ── Generated footer ─────────────────────────────────────────
   if (quotations.length > 0) {
@@ -262,7 +295,7 @@ export async function exportQuotationsExcel({ quotations, filters }) {
 
   // Freeze the report header (row 10) and enable the column auto-filter.
   ws.views = [{ state: "frozen", ySplit: headerRow }];
-  ws.autoFilter = { from: `A${headerRow}`, to: `H${Math.max(headerRow, lastDataRow)}` };
+  ws.autoFilter = { from: `A${headerRow}`, to: `K${Math.max(headerRow, lastDataRow)}` };
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], {

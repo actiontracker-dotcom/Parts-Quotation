@@ -1392,6 +1392,14 @@ export async function loadQuotations() {
     }
   }
 
+  for (const group of groups.values()) {
+    group.items = (detailMap.get(group.quotationNo) || []).map((item) => ({
+      partNumber: item.partNumber,
+      description: item.description,
+      quantity: item.quantity,
+    }));
+  }
+
   const quotations = Array.from(groups.values());
   quotations.sort((a, b) => b.quotationNo.localeCompare(a.quotationNo));
 
