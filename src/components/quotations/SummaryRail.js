@@ -68,6 +68,7 @@ export default function SummaryRail({ totals, submitting, onSubmit, customer, qu
             size="md"
             icon={FileDown}
             loading={downloading}
+            disabled={!isEdit}
             onClick={async () => {
               setDownloading(true);
               const { generateQuotationPdf } = await import(
