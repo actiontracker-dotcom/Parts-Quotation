@@ -11,6 +11,7 @@ import {
   FOLLOWUP_BY,
   REVISE_NUMBERS,
 } from "@/constants/masterData";
+import { fromCanonicalToDateInput } from "@/lib/utils/dateUtils";
 
 const FOLLOWUP_BY_EXCLUDING_DHEERENDRA_SEN = FOLLOWUP_BY.filter(
   (item) => !/dheerendra\s+sen/i.test(`${item.value} ${item.label}`)
@@ -64,7 +65,7 @@ export default function QuotationInfoSection({
           label="Quotation Date"
           required
           type="date"
-          value={values.quotationDate}
+          value={fromCanonicalToDateInput(values.quotationDate)}
           error={errors["quotation.quotationDate"]}
           onChange={(e) => onChange("quotationDate", e.target.value)}
         />
@@ -78,7 +79,7 @@ export default function QuotationInfoSection({
         <Input
           label="Party Reference Date"
           type="date"
-          value={values.partyReferenceDate}
+          value={fromCanonicalToDateInput(values.partyReferenceDate)}
           error={errors["quotation.partyReferenceDate"]}
           onChange={(e) => onChange("partyReferenceDate", e.target.value)}
         />

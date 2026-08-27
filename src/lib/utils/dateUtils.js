@@ -2,6 +2,118 @@
 // aggregation) and the dashboard UI (client-side preset date ranges). Both must
 // agree on parsing so filter results are identical everywhere.
 
+// ─── CANONICAL DATE FORMAT ─────────────────────────────────────────────────────────
+// The entire application uses DD/MM/YYYY as the canonical date format.
+// This is the format used for:
+// - React state (after normalization from HTML date input)
+// - API requests/responses
+// - Google Sheets writes
+// - Google Sheets read-back (normalized from legacy formats)
+// - Verification comparisons
+// - Display/PDF
+
+/**
+ * Normalizes a date value to the canonical DD/MM/YYYY format.
+ * Handles multiple input formats:
+ * - YYYY-MM-DD (HTML date input format)
+ * - DD/MM/YYYY (canonical format)
+ * - DD-MM-YYYY (legacy format)
+ * - Date-like Google Sheet values
+ * Returns empty string for null/undefined/blank values.
+ */
+export function normalizeToCanonicalDate(value) {
+  if (value === null || value === undefined) return "";
+  const s = String(value).trim();
+  if (!s) return "";
+
+  // Already in canonical format DD/MM/YYYY
+  const canonical = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (canonical) {
+    const [, d, m, y] = canonical.map(Number);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      const paddedD = String(d).padStart(2, "0");
+      const paddedM = String(m).padStart(2, "0");
+      return `${paddedD}/${paddedM}/${y}`;
+    }
+  }
+
+  // YYYY-MM-DD (HTML date input format) - convert to DD/MM/YYYY
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    const [, y, m, d] = iso.map(Number);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      const paddedD = String(d).padStart(2, "0");
+      const paddedM = String(m).padStart(2, "0");
+      return `${paddedD}/${paddedM}/${y}`;
+    }
+  }
+
+  // DD-MM-YYYY (legacy format) - convert to DD/MM/YYYY
+  const dmyDash = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (dmyDash) {
+    const [, d, m, y] = dmyDash.map(Number);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      const paddedD = String(d).padStart(2, "0");
+      const paddedM = String(m).padStart(2, "0");
+      return `${paddedD}/${paddedM}/${y}`;
+    }
+  }
+
+  // If already in DD/MM/YYYY format but not matched above, return as-is
+  if (s.includes("/") && s.split("/").length === 3) {
+    return s;
+  }
+
+  // Fallback: return original value if cannot normalize
+  return s;
+}
+
+/**
+ * Converts HTML date input value (YYYY-MM-DD) to canonical format (DD/MM/YYYY).
+ * This is used at the frontend input boundary.
+ */
+export function fromDateInputToCanonical(value) {
+  if (!value) return "";
+  const s = String(value).trim();
+  if (!s) return "";
+  
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    const [, y, m, d] = iso.map(Number);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      const paddedD = String(d).padStart(2, "0");
+      const paddedM = String(m).padStart(2, "0");
+      return `${paddedD}/${paddedM}/${y}`;
+    }
+  }
+  
+  // If not in YYYY-MM-DD format, try to normalize it
+  return normalizeToCanonicalDate(s);
+}
+
+/**
+ * Converts canonical format (DD/MM/YYYY) to HTML date input value (YYYY-MM-DD).
+ * This is used when populating date inputs from canonical state.
+ */
+export function fromCanonicalToDateInput(value) {
+  if (!value) return "";
+  const s = String(value).trim();
+  if (!s) return "";
+  
+  const canonical = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (canonical) {
+    const [, d, m, y] = canonical.map(Number);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      const paddedM = String(m).padStart(2, "0");
+      const paddedD = String(d).padStart(2, "0");
+      return `${y}-${paddedM}-${paddedD}`;
+    }
+  }
+  
+  // If not in canonical format, return as-is (let browser handle it)
+  return s;
+}
+
 // Robust local-calendar parser for the "Quotation Date" field. Handles the
 // YYYY-MM-DD value written by the date input plus common legacy formats that
 // may already exist in the sheet (DD/MM/YYYY, DD-MM-YYYY). Returns null when

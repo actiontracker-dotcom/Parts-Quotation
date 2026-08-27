@@ -5,6 +5,7 @@ import {
   updateQuotationOrderStatus,
 } from "@/lib/services/googleSheetsService";
 import { getSessionUser, unauthorizedResponse } from "@/lib/auth/session";
+import { normalizeToCanonicalDate } from "@/lib/utils/dateUtils";
 
 // POST /api/quotations/[quotationNo]/followup
 //
@@ -105,6 +106,14 @@ export async function POST(request, { params }) {
       { success: false, message: "Request body must be valid JSON.", errors: {} },
       { status: 400 }
     );
+  }
+
+  // Normalize date fields to DD/MM/YYYY canonical format
+  if (body.nextFollowupDate) {
+    body.nextFollowupDate = normalizeToCanonicalDate(body.nextFollowupDate);
+  }
+  if (body.orderReceivedDate) {
+    body.orderReceivedDate = normalizeToCanonicalDate(body.orderReceivedDate);
   }
 
   const submissionType = stringValue(body.submissionType);

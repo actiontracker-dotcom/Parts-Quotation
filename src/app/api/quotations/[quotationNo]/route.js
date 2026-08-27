@@ -4,6 +4,7 @@ import { validateQuotation } from "@/lib/validation/quotationSchema";
 import { getSessionUser, unauthorizedResponse } from "@/lib/auth/session";
 import { getQuotations } from "@/lib/services/googleSheetsService";
 import { computeLineTotal, computeQuotationTotals, toNumber } from "@/lib/utils/formatters";
+import { normalizeToCanonicalDate } from "@/lib/utils/dateUtils";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +83,16 @@ export async function PUT(request, { params }) {
       { success: false, message: "Request body must be valid JSON.", errors: {} },
       { status: 400 }
     );
+  }
+
+  // Normalize date fields to DD/MM/YYYY canonical format
+  if (body.quotation) {
+    if (body.quotation.quotationDate) {
+      body.quotation.quotationDate = normalizeToCanonicalDate(body.quotation.quotationDate);
+    }
+    if (body.quotation.partyReferenceDate) {
+      body.quotation.partyReferenceDate = normalizeToCanonicalDate(body.quotation.partyReferenceDate);
+    }
   }
 
   const { success, errors } = validateQuotation(body);
@@ -187,9 +198,9 @@ export async function PUT(request, { params }) {
         readBackRaw: readBack.quotation.quotationDate,
         submittedType: typeof body.quotation.quotationDate,
         readBackType: typeof readBack.quotation.quotationDate,
-        normalizedSubmitted: body.quotation.quotationDate || "",
-        normalizedReadBack: readBack.quotation.quotationDate,
-        match: readBack.quotation.quotationDate === (body.quotation.quotationDate || "")
+        normalizedSubmitted: normalizeToCanonicalDate(body.quotation.quotationDate || ""),
+        normalizedReadBack: normalizeToCanonicalDate(readBack.quotation.quotationDate || ""),
+        match: normalizeToCanonicalDate(readBack.quotation.quotationDate || "") === normalizeToCanonicalDate(body.quotation.quotationDate || "")
       },
       {
         field: "partyReferenceNumber",
@@ -207,9 +218,9 @@ export async function PUT(request, { params }) {
         readBackRaw: readBack.quotation.partyReferenceDate,
         submittedType: typeof body.quotation.partyReferenceDate,
         readBackType: typeof readBack.quotation.partyReferenceDate,
-        normalizedSubmitted: body.quotation.partyReferenceDate || "",
-        normalizedReadBack: readBack.quotation.partyReferenceDate,
-        match: readBack.quotation.partyReferenceDate === (body.quotation.partyReferenceDate || "")
+        normalizedSubmitted: normalizeToCanonicalDate(body.quotation.partyReferenceDate || ""),
+        normalizedReadBack: normalizeToCanonicalDate(readBack.quotation.partyReferenceDate || ""),
+        match: normalizeToCanonicalDate(readBack.quotation.partyReferenceDate || "") === normalizeToCanonicalDate(body.quotation.partyReferenceDate || "")
       },
       {
         field: "paymentTerms",

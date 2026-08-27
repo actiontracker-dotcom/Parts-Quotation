@@ -4,6 +4,7 @@ import { validateQuotation } from "@/lib/validation/quotationSchema";
 import { appendQuotation, getQuotations, generateNextQuotationNumber } from "@/lib/services/googleSheetsService";
 import { getSessionUser, unauthorizedResponse } from "@/lib/auth/session";
 import { computeQuotationTotals } from "@/lib/utils/formatters";
+import { normalizeToCanonicalDate } from "@/lib/utils/dateUtils";
 
 // This route handles both listing and creating quotations.
 // The frontend always calls this endpoint; it never touches the sheet directly.
@@ -41,6 +42,16 @@ export async function POST(request) {
       { success: false, message: "Request body must be valid JSON.", errors: {} },
       { status: 400 }
     );
+  }
+
+  // Normalize date fields to DD/MM/YYYY canonical format
+  if (body.quotation) {
+    if (body.quotation.quotationDate) {
+      body.quotation.quotationDate = normalizeToCanonicalDate(body.quotation.quotationDate);
+    }
+    if (body.quotation.partyReferenceDate) {
+      body.quotation.partyReferenceDate = normalizeToCanonicalDate(body.quotation.partyReferenceDate);
+    }
   }
 
   const { success, data, errors } = validateQuotation(body);

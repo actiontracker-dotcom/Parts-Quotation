@@ -5,6 +5,27 @@ const INR_FORMATTER = new Intl.NumberFormat("en-IN", {
 export function formatDate(dateString) {
   if (!dateString) return "";
   
+  // Handle DD/MM/YYYY format (canonical format used in this app)
+  const ddmmyyyyMatch = dateString.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (ddmmyyyyMatch) {
+    const [, d, m, y] = ddmmyyyMatch.map(Number);
+    const day = String(d).padStart(2, '0');
+    const month = String(m).padStart(2, '0');
+    const year = y;
+    return `${day}/${month}/${year}`;
+  }
+  
+  // Handle YYYY-MM-DD format (HTML date input)
+  const yyyymmddMatch = dateString.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (yyyymmddMatch) {
+    const [, y, m, d] = yyyymmddMatch.map(Number);
+    const day = String(d).padStart(2, '0');
+    const month = String(m).padStart(2, '0');
+    const year = y;
+    return `${day}/${month}/${year}`;
+  }
+  
+  // Fallback to standard Date parsing for other formats
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return dateString;
   

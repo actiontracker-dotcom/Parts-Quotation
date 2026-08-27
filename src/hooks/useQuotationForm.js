@@ -9,6 +9,7 @@ import {
   DEFAULT_GST_RATE,
 } from "@/lib/constants/quotationOptions";
 import { computeQuotationTotals } from "@/lib/utils/formatters";
+import { fromDateInputToCanonical } from "@/lib/utils/dateUtils";
 
 const INITIAL_CUSTOMER = {
   customerName: "",
@@ -62,7 +63,12 @@ export function useQuotationForm({ mode = "create", quotationNo = null } = {}) {
   }, []);
 
   const updateQuotationField = useCallback((field, value) => {
-    setQuotation((prev) => ({ ...prev, [field]: value }));
+    // Normalize date fields from YYYY-MM-DD (HTML input) to DD/MM/YYYY (canonical)
+    let normalizedValue = value;
+    if (field === "quotationDate" || field === "partyReferenceDate") {
+      normalizedValue = fromDateInputToCanonical(value);
+    }
+    setQuotation((prev) => ({ ...prev, [field]: normalizedValue }));
     setErrors((prev) => ({ ...prev, [`quotation.${field}`]: undefined }));
   }, []);
 

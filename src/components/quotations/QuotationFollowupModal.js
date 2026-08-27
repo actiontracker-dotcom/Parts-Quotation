@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/useToast";
 import {
   ORDER_STATUS_OPTIONS,
 } from "@/lib/constants/quotationOptions";
+import { fromDateInputToCanonical, fromCanonicalToDateInput } from "@/lib/utils/dateUtils";
 
 // Mirrors the authoritative set in googleSheetsService. UI-only protection —
 // the service-layer guard enforces the closed lifecycle on every request.
@@ -43,12 +44,22 @@ export default function QuotationFollowupModal({ quotationNo, orderStatus = "", 
   }, [onClose]);
 
   function updateNext(field, value) {
-    setNextForm((prev) => ({ ...prev, [field]: value }));
+    // Normalize date fields from YYYY-MM-DD (HTML input) to DD/MM/YYYY (canonical)
+    let normalizedValue = value;
+    if (field === "nextFollowupDate") {
+      normalizedValue = fromDateInputToCanonical(value);
+    }
+    setNextForm((prev) => ({ ...prev, [field]: normalizedValue }));
     setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
   }
 
   function updateOrder(field, value) {
-    setOrderForm((prev) => ({ ...prev, [field]: value }));
+    // Normalize date fields from YYYY-MM-DD (HTML input) to DD/MM/YYYY (canonical)
+    let normalizedValue = value;
+    if (field === "orderReceivedDate") {
+      normalizedValue = fromDateInputToCanonical(value);
+    }
+    setOrderForm((prev) => ({ ...prev, [field]: normalizedValue }));
     setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
   }
 
@@ -297,7 +308,7 @@ export default function QuotationFollowupModal({ quotationNo, orderStatus = "", 
                 label="Next Follow-up Date"
                 required
                 type="date"
-                value={nextForm.nextFollowupDate}
+                value={fromCanonicalToDateInput(nextForm.nextFollowupDate)}
                 onChange={(e) => updateNext("nextFollowupDate", e.target.value)}
                 error={fieldErrors.nextFollowupDate}
               />
@@ -347,7 +358,7 @@ export default function QuotationFollowupModal({ quotationNo, orderStatus = "", 
               <Input
                 label="Order Received Date"
                 type="date"
-                value={orderForm.orderReceivedDate}
+                value={fromCanonicalToDateInput(orderForm.orderReceivedDate)}
                 onChange={(e) => updateOrder("orderReceivedDate", e.target.value)}
                 error={fieldErrors.orderReceivedDate}
               />
