@@ -8,7 +8,7 @@ export function formatDate(dateString) {
   // Handle DD/MM/YYYY format (canonical format used in this app)
   const ddmmyyyyMatch = dateString.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (ddmmyyyyMatch) {
-    const [, d, m, y] = ddmmyyyMatch.map(Number);
+    const [, d, m, y] = ddmmyyyyMatch.map(Number);
     const day = String(d).padStart(2, '0');
     const month = String(m).padStart(2, '0');
     const year = y;
