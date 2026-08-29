@@ -1398,6 +1398,7 @@ export async function loadQuotations() {
       partNumber: item.partNumber,
       description: item.description,
       quantity: item.quantity,
+      total: item.total,
     }));
   }
 

@@ -254,7 +254,7 @@ export async function exportQuotationsExcel({ quotations, filters }) {
         Number.isFinite(Number(q.numberOfFollowup)) ? Number(q.numberOfFollowup) : (q.numberOfFollowup || ""),
         q.orderStatus,
         formatDate(q.quotationDate),
-        Number(q.totalAmount) || 0,
+        Number(item.total) || 0,
         cleanTextValue(item.partNumber),
         cleanTextValue(item.description),
         quantityCellValue(item.quantity),
