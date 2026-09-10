@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import {
   getQuotationFollowupHistory,
+  getQuotationByNo,
   updateQuotationNextFollowup,
   updateQuotationOrderStatus,
 } from "@/lib/services/googleSheetsService";
 import { getSessionUser, unauthorizedResponse } from "@/lib/auth/session";
 import { normalizeToCanonicalDate } from "@/lib/utils/dateUtils";
+import { syncToO2d } from "@/lib/services/o2dSyncService";
 
 // POST /api/quotations/[quotationNo]/followup
 //
@@ -211,12 +213,28 @@ export async function POST(request, { params }) {
         );
       }
 
+      const isWon = stringValue(body.orderStatus) === "Won";
+
+      let o2dSync = null;
+      if (isWon) {
+        try {
+          const fullQuotation = await getQuotationByNo(normalizedQuotationNo);
+          if (fullQuotation) {
+            o2dSync = await syncToO2d(fullQuotation);
+          }
+        } catch (syncError) {
+          console.error("[quotations/[quotationNo]/followup/POST] O2D sync error:", syncError);
+          o2dSync = { success: false, error: "O2D sync failed" };
+        }
+      }
+
       return NextResponse.json(
         {
           success: true,
           message: "Order status submitted successfully.",
           quotationNo: normalizedQuotationNo,
           rowsUpdated: result.data.rowsUpdated,
+          ...(o2dSync ? { o2dSync } : {}),
         },
         { status: 200 }
       );
