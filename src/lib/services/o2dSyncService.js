@@ -28,6 +28,7 @@ export function buildO2dPayload(quotation) {
   return {
     quotationNo,
     customer: {
+      // Already sending — 9 fields
       customerName: customer.customerName || "",
       gstNo: customer.gstNo || "",
       address: customer.fullAddressGst || customer.fullAddress || "",
@@ -37,8 +38,30 @@ export function buildO2dPayload(quotation) {
       contactNumber: customer.contactNumber || "",
       email: customer.emailTo || "",
       division: q.division || "",
+
+      // Customer level — 6 fields
+      fullAddressWithGST: customer.fullAddressGst || "",
+      designation: customer.designation || "",
+      emailCC: customer.emailCc || "",
+      location: customer.location || "",
+      userID: customer.userId || "",
+      engineerRemark: customer.engineerRemark || "",
+
+      // Quotation level — 7 fields
+      sourceOfEnquiry: q.sourceOfEnquiry || "",
+      enquiryGeneratedBy: q.enquiryGeneratedBy || "",
+      validity: q.quotationValidity || "",
+      quotationDate: q.quotationDate || "",
+      partyRefNo: q.partyReferenceNumber || "",
+      partyRefDt: q.partyReferenceDate || "",
+      quotationFollowupBy: q.quotationFollowUpBy || "",
+
+      // Followup level — 2 fields
+      remarkForOrderReceived: followup.remarkForOrderReceived || "",
+      orderNumber: followup.orderNumber || "",
     },
     items: items.map((item, index) => ({
+      // Already sending — 10 fields
       partNo: item.partNumber || "",
       description: item.description || "",
       hsnCode: item.hsnCode || "",
@@ -49,6 +72,11 @@ export function buildO2dPayload(quotation) {
       otherRate: item.otherRate || 0,
       gstRate: parseFloat(item.gstRate) || 0,
       itemIndex: index,
+
+      // Items level — 3 fields
+      availability: item.availability || "",
+      liveStock: item.liveStock || "",
+      priceWEF: item.priceWef || "",
     })),
     paymentTerms: q.paymentTerms || "",
     termsOfDelivery: q.termsOfDelivery || "",
