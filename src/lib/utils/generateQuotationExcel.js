@@ -18,9 +18,10 @@ const REPORT_HEADERS = [
   "PART NUMBER",
   "DESCRIPTION",
   "QUANTITY",
+  "NEXT FOLLOWUP DATE",
 ];
 
-const REPORT_COLUMN_WIDTHS = [32, 32, 15, 11, 6, 14, 15, 16, 15, 42, 10];
+const REPORT_COLUMN_WIDTHS = [32, 32, 15, 11, 6, 14, 15, 16, 15, 42, 10, 16];
 
 // Indian (lakh/crore) currency number format with the rupee symbol.
 const INR_AMOUNT_FORMAT =
@@ -227,6 +228,7 @@ export async function exportQuotationsExcel({ quotations, filters }) {
     { horizontal: "left", vertical: "middle", wrapText: true },
     { horizontal: "left", vertical: "middle", wrapText: true },
     { horizontal: "center", vertical: "middle" },
+    { horizontal: "center", vertical: "middle" },
   ];
 
   let dataRowIndex = headerRow + 1;
@@ -258,6 +260,7 @@ export async function exportQuotationsExcel({ quotations, filters }) {
         cleanTextValue(item.partNumber),
         cleanTextValue(item.description),
         quantityCellValue(item.quantity),
+        q.followupNextFollowupDate ? formatDate(q.followupNextFollowupDate) : "-",
       ];
 
       values.forEach((value, c) => {
@@ -295,11 +298,204 @@ export async function exportQuotationsExcel({ quotations, filters }) {
 
   // Freeze the report header (row 10) and enable the column auto-filter.
   ws.views = [{ state: "frozen", ySplit: headerRow }];
-  ws.autoFilter = { from: `A${headerRow}`, to: `K${Math.max(headerRow, lastDataRow)}` };
+  ws.autoFilter = { from: `A${headerRow}`, to: `L${Math.max(headerRow, lastDataRow)}` };
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
   downloadBlob(blob, buildReportFileName(filters));
+}
+
+/**
+ * Builds and downloads a styled .xlsx follow-up report from the given (already
+ * filtered) follow-up quotations. Includes a navy title band, filter summary,
+ * KPI cards, a formatted data table (with freeze panes, auto-filter, semantic
+ * order status colours and Indian currency formatting) and a generated-on footer.
+ */
+export async function exportFollowupsExcel({ quotations, filters }) {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Follow-up Report");
+
+  ws.columns = REPORT_COLUMN_WIDTHS.map((width) => ({ width }));
+
+  // ── Report title ─────────────────────────────────────────────
+  ws.mergeCells("A1:L1");
+  const title = ws.getCell("A1");
+  title.value = "PENDING FOLLOW-UPS REPORT";
+  title.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+  title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F3487" } };
+  title.alignment = { horizontal: "center", vertical: "middle" };
+  ws.getRow(1).height = 34;
+
+  // ── Filter summary ───────────────────────────────────────────
+  const summaryRows = [
+    ["Order Status", filters.orderStatus || "All"],
+    ["Division", filters.division || "All"],
+    ["Date Range", filters.dateWise || "All"],
+  ];
+  summaryRows.forEach(([label, value], i) => {
+    const r = 3 + i;
+    const labelCell = ws.getCell(`A${r}`);
+    const valueCell = ws.getCell(`B${r}`);
+    labelCell.value = label;
+    labelCell.font = { bold: true, color: { argb: "FF1F3487" } };
+    labelCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF4F5F9" } };
+    labelCell.alignment = { vertical: "middle" };
+    valueCell.value = value;
+    valueCell.font = { color: { argb: "FF2E3460" } };
+    valueCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEEF1FD" } };
+    valueCell.alignment = { vertical: "middle" };
+    ws.getRow(r).height = 20;
+  });
+  borderBox(ws, 3, 1, 5, 2, THIN_LIGHT);
+
+  // ── KPI cards ────────────────────────────────────────────────
+  const totalAmount = quotations.reduce((sum, q) => sum + (Number(q.totalAmount) || 0), 0);
+
+  ws.mergeCells("A7:B7");
+  const kpi1Label = ws.getCell("A7");
+  kpi1Label.value = "TOTAL FOLLOW-UPS";
+  kpi1Label.font = { bold: true, size: 10, color: { argb: "FF2843AD" } };
+  kpi1Label.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEEF1FD" } };
+  kpi1Label.alignment = { horizontal: "center", vertical: "middle" };
+  ws.mergeCells("A8:B8");
+  const kpi1Value = ws.getCell("A8");
+  kpi1Value.value = quotations.length;
+  kpi1Value.numFmt = "0";
+  kpi1Value.font = { bold: true, size: 16, color: { argb: "FF1F3487" } };
+  kpi1Value.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF4F6FB" } };
+  kpi1Value.alignment = { horizontal: "center", vertical: "middle" };
+
+  ws.mergeCells("D7:E7");
+  const kpi2Label = ws.getCell("D7");
+  kpi2Label.value = "TOTAL AMOUNT";
+  kpi2Label.font = { bold: true, size: 10, color: { argb: "FF2843AD" } };
+  kpi2Label.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEEF1FD" } };
+  kpi2Label.alignment = { horizontal: "center", vertical: "middle" };
+  ws.mergeCells("D8:E8");
+  const kpi2Value = ws.getCell("D8");
+  kpi2Value.value = totalAmount;
+  kpi2Value.numFmt = INR_AMOUNT_FORMAT;
+  kpi2Value.font = { bold: true, size: 16, color: { argb: "FF1F3487" } };
+  kpi2Value.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF4F6FB" } };
+  kpi2Value.alignment = { horizontal: "right", vertical: "middle" };
+
+  ws.getRow(7).height = 24;
+  ws.getRow(8).height = 30;
+  borderBox(ws, 7, 1, 8, 2, THIN_LIGHT);
+  borderBox(ws, 7, 4, 8, 5, THIN_LIGHT);
+
+  // ── Data table header ────────────────────────────────────────
+  const headerRow = 10;
+  const headerFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F3487" } };
+  REPORT_HEADERS.forEach((header, i) => {
+    const cell = ws.getCell(headerRow, i + 1);
+    cell.value = header;
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = headerFill;
+    cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    cell.border = { top: THIN_LIGHT, left: THIN_LIGHT, bottom: THIN_LIGHT, right: THIN_LIGHT };
+  });
+  ws.getRow(headerRow).height = 26;
+
+  // ── Data rows ────────────────────────────────────────────────
+  const dataAlignment = [
+    { horizontal: "left", vertical: "middle" },
+    { horizontal: "left", vertical: "middle" },
+    { horizontal: "center", vertical: "middle" },
+    { horizontal: "center", vertical: "middle" },
+    { horizontal: "center", vertical: "middle" },
+    { horizontal: "center", vertical: "middle" },
+    { horizontal: "center", vertical: "middle" },
+    { horizontal: "right", vertical: "middle" },
+    { horizontal: "left", vertical: "middle", wrapText: true },
+    { horizontal: "left", vertical: "middle", wrapText: true },
+    { horizontal: "center", vertical: "middle" },
+    { horizontal: "center", vertical: "middle" },
+  ];
+
+  let dataRowIndex = headerRow + 1;
+
+  quotations.forEach((q) => {
+    const itemRows =
+      Array.isArray(q.items) && q.items.length > 0
+        ? q.items
+        : [{ partNumber: "-", description: "-", quantity: "-" }];
+
+    itemRows.forEach((item) => {
+      const r = dataRowIndex;
+      dataRowIndex += 1;
+
+      const shade = (r - headerRow - 1) % 2 === 1;
+      const rowFill = shade
+        ? { type: "pattern", pattern: "solid", fgColor: { argb: "FFF4F6FB" } }
+        : null;
+
+      const values = [
+        q.quotationNo,
+        q.customerName,
+        q.contactNumber,
+        q.division,
+        Number.isFinite(Number(q.numberOfFollowup)) ? Number(q.numberOfFollowup) : (q.numberOfFollowup || ""),
+        q.orderStatus,
+        formatDate(q.quotationDate),
+        Number(item.total) || 0,
+        cleanTextValue(item.partNumber),
+        cleanTextValue(item.description),
+        quantityCellValue(item.quantity),
+        q.followupNextFollowupDate ? formatDate(q.followupNextFollowupDate) : "-",
+      ];
+
+      values.forEach((value, c) => {
+        const cell = ws.getCell(r, c + 1);
+        cell.value = value;
+        cell.alignment = dataAlignment[c];
+        cell.border = { top: THIN_GRAY, left: THIN_GRAY, bottom: THIN_GRAY, right: THIN_GRAY };
+        if (rowFill) cell.fill = rowFill;
+
+        if (c === 5) {
+          // Semantic order status chip
+          const key = String(value || "").trim().toLowerCase();
+          const style = STATUS_STYLES[key] || STATUS_STYLES.fallback;
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: style.fill } };
+          cell.font = { bold: true, color: { argb: style.color } };
+        } else if (c === 7) {
+          cell.numFmt = INR_AMOUNT_FORMAT;
+          cell.font = { bold: true, color: { argb: "FF1F3487" } };
+        }
+      });
+
+      ws.getRow(r).height = 20;
+    });
+  });
+
+  const lastDataRow = dataRowIndex - 1;
+
+  // ── Generated footer ─────────────────────────────────────────
+  if (quotations.length > 0) {
+    const footerRow = lastDataRow + 2;
+    const footer = ws.getCell(`A${footerRow}`);
+    footer.value = `Generated On: ${formatReportDate(new Date())}`;
+    footer.font = { size: 9, color: { argb: "FF9BA1C1" } };
+  }
+
+  // Freeze the report header (row 10) and enable the column auto-filter.
+  ws.views = [{ state: "frozen", ySplit: headerRow }];
+  ws.autoFilter = { from: `A${headerRow}`, to: `L${Math.max(headerRow, lastDataRow)}` };
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  downloadBlob(blob, buildFollowupReportFileName(filters));
+}
+
+function buildFollowupReportFileName(filters) {
+  const parts = [];
+  if (filters.division !== "All") parts.push(slugPart(filters.division));
+  if (filters.dateWise !== "All") parts.push(slugPart(filters.dateWise));
+  if (filters.search) parts.push("search");
+  const base = parts.length ? parts.join("-") : "all";
+  return `followup-report-${base}.xlsx`;
 }

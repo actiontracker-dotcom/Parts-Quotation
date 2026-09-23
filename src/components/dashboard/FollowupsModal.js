@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   X,
   Calendar,
@@ -10,6 +11,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  Download,
+  Pencil,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
@@ -17,6 +20,7 @@ import QuotationDetailsModal from "@/components/quotations/QuotationDetailsModal
 import QuotationFollowupModal from "@/components/quotations/QuotationFollowupModal";
 import { cn } from "@/lib/utils/cn";
 import { parseQuotationDate, toDateKey, addDays, startOfWeek } from "@/lib/utils/dateUtils";
+import { exportFollowupsExcel } from "@/lib/utils/generateQuotationExcel";
 
 const LIMIT = 20;
 
@@ -136,6 +140,7 @@ function presetDates(id, now) {
 }
 
 export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [selectedDates, setSelectedDates] = useState(() => new Set());
   const [activePreset, setActivePreset] = useState("all");
@@ -282,6 +287,96 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
     setDivision(value);
     setPage(1);
   }
+
+  const handleExportExcel = useCallback(async () => {
+    try {
+      // Fetch all records for the current filters (bypass pagination)
+      const params = new URLSearchParams();
+      params.set("status", "Pending");
+      if (selectedDates.size > 0) {
+        params.set("dates", Array.from(selectedDates).sort().join(","));
+      }
+      const trimmedSearch = (debouncedSearch || "").trim();
+      if (trimmedSearch) {
+        params.set("q", trimmedSearch);
+      }
+      if (division && division !== "All") {
+        params.set("division", division);
+      }
+
+      // The API caps limit at 100 (MAX_LIMIT), so page through the full
+      // filtered dataset instead of assuming limit=1000 returns everything.
+      const EXPORT_PAGE_SIZE = 100;
+      const followupRecords = [];
+      let exportPage = 1;
+      let exportTotalPages = 1;
+      do {
+        params.set("page", String(exportPage));
+        params.set("limit", String(EXPORT_PAGE_SIZE));
+        const res = await fetch(`/api/dashboard/followups?${params.toString()}`);
+        const json = await res.json();
+        if (!json.success) {
+          throw new Error(json.message || "Failed to load follow-ups for export");
+        }
+        followupRecords.push(...(json.records || []));
+        exportTotalPages = json.pagination?.totalPages || 1;
+        exportPage += 1;
+      } while (exportPage <= exportTotalPages);
+
+      if (followupRecords.length === 0) {
+        alert("No follow-ups to export");
+        return;
+      }
+
+      // Full quotation data (contact, NOF, date, amounts, items) comes from the
+      // existing /api/quotations list — the same single-request approach the
+      // /quotations page export uses. Fetching each quotation's detail endpoint
+      // individually performs a full sheet read per call and exhausts the
+      // Google Sheets read quota (60/min) on larger exports.
+      const listRes = await fetch("/api/quotations");
+      const listJson = await listRes.json();
+      if (!listJson.success) {
+        throw new Error(listJson.message || "Failed to load quotations for export");
+      }
+      const quotationByNo = new Map(
+        (listJson.data || []).map((q) => [q.quotationNo, q])
+      );
+
+      const exportQuotations = followupRecords.map((record) => {
+        const quotation = quotationByNo.get(record.quotationNo);
+        return {
+          quotationNo: record.quotationNo,
+          customerName: record.customerName || quotation?.customerName || "",
+          contactNumber: quotation?.contactNumber || "",
+          division: record.division,
+          numberOfFollowup: quotation?.numberOfFollowup || "",
+          orderStatus: record.orderStatus || quotation?.orderStatus || "",
+          quotationDate: quotation?.quotationDate || "",
+          totalAmount: quotation?.totalAmount || 0,
+          items: quotation?.items?.length
+            ? quotation.items
+            : [{ partNumber: "-", description: "-", quantity: "-" }],
+          followupNextFollowupDate: record.nextFollowupDate || "",
+        };
+      });
+
+      const sortedKeys = Array.from(selectedDates).sort();
+      await exportFollowupsExcel({
+        quotations: exportQuotations,
+        filters: {
+          division,
+          dateWise: activePreset || "All",
+          fromDate: sortedKeys[0] || "",
+          toDate: sortedKeys[sortedKeys.length - 1] || "",
+          orderStatus: "Pending",
+          search: trimmedSearch,
+        },
+      });
+    } catch (err) {
+      console.error("Excel export failed:", err);
+      alert("Failed to export Excel. Please try again.");
+    }
+  }, [selectedDates, debouncedSearch, division, activePreset]);
 
   function toggleDate(key, date) {
     setSelectedDates((prev) => {
@@ -551,11 +646,16 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
               </div>
             </div>
 
-            <div className="sm:pb-1">
+            <div className="sm:pb-1 flex items-center justify-between sm:justify-end gap-2">
               <p className="text-sm text-ink-400">
                 <span className="font-semibold text-ink-700">{total}</span> matching record
                 {total === 1 ? "" : "s"}
               </p>
+              {total > 0 && (
+                <Button variant="secondary" size="sm" icon={Download} onClick={handleExportExcel}>
+                  Export Excel
+                </Button>
+              )}
             </div>
           </div>
 
@@ -602,7 +702,7 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-ink-50 border-b border-ink-100">
-                      {["Quotation No", "Customer Name", "Next Followup Date", "Followup Status", "Followup Remark", "Action"].map((h) => (
+                      {["Quotation No", "Customer Name", "Division", "Next Followup Date", "Followup Status", "Followup Remark", "Action"].map((h) => (
                         <th key={h} className="px-5 py-4 text-left font-semibold text-ink-600 whitespace-nowrap">
                           {h}
                         </th>
@@ -629,6 +729,9 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
                           {record.customerName}
                         </td>
                         <td className="px-5 py-4 text-ink-600 whitespace-nowrap">
+                          {record.division || "—"}
+                        </td>
+                        <td className="px-5 py-4 text-ink-600 whitespace-nowrap">
                           {formatDateCell(record.nextFollowupDate)}
                         </td>
                         <td className="px-5 py-4 whitespace-nowrap">
@@ -638,15 +741,26 @@ export default function FollowupsModal({ isOpen, onClose, onDataChanged }) {
                           {record.followupRemark || "—"}
                         </td>
                         <td className="px-5 py-4 text-center whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => setFollowUpRecord(record)}
-                            className="p-1.5 rounded-md text-green-600 hover:text-green-700 hover:bg-green-50 transition-colors cursor-pointer"
-                            title="Next Follow-up"
-                            aria-label={`Next Follow-up for ${record.quotationNo}`}
-                          >
-                            <Calendar className="h-4 w-4" />
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setFollowUpRecord(record)}
+                              className="p-1.5 rounded-md text-green-600 hover:text-green-700 hover:bg-green-50 transition-colors cursor-pointer"
+                              title="Next Follow-up"
+                              aria-label={`Next Follow-up for ${record.quotationNo}`}
+                            >
+                              <Calendar className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => router.push(`/quotations/${encodeURIComponent(record.quotationNo)}/edit`)}
+                              className="p-1.5 rounded-md text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors cursor-pointer"
+                              title="Edit Quotation"
+                              aria-label={`Edit Quotation ${record.quotationNo}`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
